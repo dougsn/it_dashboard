@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { Plus, Network, Pencil, Trash2, ExternalLink, Copy, Check } from "lucide-react";
+import { Topbar } from "@/components/topbar";
 import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -111,20 +112,20 @@ export default function LinksPage() {
   const online = links.filter((l) => l.isOnline).length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Links de Internet</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Monitoramento de links via webhooks chamados pelo Mikrotik
-          </p>
-        </div>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4 mr-2" />
+    <>
+      <Topbar
+        title="Links de Internet"
+        icon={Network}
+        subtitle="Monitoramento via webhooks do Mikrotik"
+        live={!loading}
+      >
+        <Button size="sm" onClick={openCreate}>
+          <Plus className="h-4 w-4 mr-1" />
           Novo Link
         </Button>
-      </div>
+      </Topbar>
 
+    <div className="p-7 space-y-6">
       {/* Stats */}
       <div className="flex gap-3">
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-success/10 border border-success/20">
@@ -232,5 +233,6 @@ export default function LinksPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </>
   );
 }

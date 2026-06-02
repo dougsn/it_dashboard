@@ -5,7 +5,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Plus, ShieldAlert, AlertTriangle, Info, AlertCircle, CheckCircle2, Clock, Pencil, Trash2, RotateCcw } from "lucide-react";
+import { Plus, ShieldAlert, AlertTriangle, Info, AlertCircle, CheckCircle2, Clock, Pencil, Trash2, RotateCcw, StickyNote } from "lucide-react";
+import { Topbar } from "@/components/topbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -186,21 +187,19 @@ export default function NotesPage() {
   }, { CRITICAL: [], HIGH: [], WARNING: [], INFO: [] });
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Notas & Rastreamento de Segurança</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Registre problemas de segurança, tarefas operacionais e acompanhe as mitigações
-          </p>
-        </div>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4 mr-2" />
+    <>
+      <Topbar
+        title="Notas & Segurança"
+        icon={StickyNote}
+        subtitle="Registre problemas de segurança e acompanhe as mitigações"
+      >
+        <Button size="sm" onClick={openCreate}>
+          <Plus className="h-4 w-4 mr-1" />
           Nova Nota
         </Button>
-      </div>
+      </Topbar>
 
+    <div className="p-7 space-y-6">
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
@@ -379,6 +378,7 @@ export default function NotesPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </>
   );
 }
 

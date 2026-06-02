@@ -6,7 +6,8 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { DeviceTypeBadge } from "@/components/device-type-badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Pencil, MapPin } from "lucide-react";
+import { Plus, Pencil, MapPin, Server } from "lucide-react";
+import { Topbar } from "@/components/topbar";
 import { formatResponseTime } from "@/lib/format";
 import type { Device, DeviceStatus } from "@prisma/client";
 
@@ -29,15 +30,15 @@ export default function DevicesPage() {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Dispositivos</h1>
-        <Link href="/devices/new" className={buttonVariants({})}>
+    <>
+      <Topbar title="Dispositivos" icon={Server} live={!loading}>
+        <Link href="/devices/new" className={buttonVariants({ size: "sm" })}>
           <Plus className="h-4 w-4 mr-1" />
           Novo
         </Link>
-      </div>
+      </Topbar>
 
+    <div className="p-7 space-y-6">
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -113,5 +114,6 @@ export default function DevicesPage() {
         </div>
       )}
     </div>
+    </>
   );
 }

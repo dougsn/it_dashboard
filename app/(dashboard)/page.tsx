@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
-import { RefreshCw, Plus, Wifi, WifiOff, Server, Network } from "lucide-react";
+import { Topbar } from "@/components/topbar";
+import { RefreshCw, Plus, Wifi, WifiOff, Server, Network, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 import type { Device, DeviceStatus, DeviceType } from "@prisma/client";
 
@@ -68,28 +69,24 @@ export default function OverviewPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Overview</h1>
-          {lastUpdated && (
-            <p className="text-xs text-muted-foreground">
-              Atualizado às {lastUpdated.toLocaleTimeString("pt-BR")}
-            </p>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={load}>
-            <RefreshCw className="h-4 w-4 mr-1" />
-            Atualizar
-          </Button>
-          <Link href="/devices/new" className={buttonVariants({ size: "sm" })}>
-            <Plus className="h-4 w-4 mr-1" />
-            Novo dispositivo
-          </Link>
-        </div>
-      </div>
+    <>
+      <Topbar
+        title="Visão Geral"
+        icon={LayoutDashboard}
+        subtitle={lastUpdated ? `Atualizado às ${lastUpdated.toLocaleTimeString("pt-BR")}` : undefined}
+        live={!loading}
+      >
+        <Button variant="outline" size="sm" onClick={load}>
+          <RefreshCw className="h-4 w-4 mr-1" />
+          Atualizar
+        </Button>
+        <Link href="/devices/new" className={buttonVariants({ size: "sm" })}>
+          <Plus className="h-4 w-4 mr-1" />
+          Novo
+        </Link>
+      </Topbar>
 
+    <div className="p-7 space-y-6">
       {/* Stats */}
       <div className="flex gap-3">
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-success/10 border border-success/20">
@@ -212,5 +209,6 @@ export default function OverviewPage() {
         </div>
       )}
     </div>
+    </>
   );
 }

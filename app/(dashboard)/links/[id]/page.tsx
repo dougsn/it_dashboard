@@ -2,13 +2,14 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/status-badge";
-import { ChevronLeft, Copy, Check, Activity, Clock, AlertTriangle } from "lucide-react";
+import { Copy, Check, Activity, Clock, AlertTriangle } from "lucide-react";
+import { Topbar } from "@/components/topbar";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -155,14 +156,17 @@ export default function LinkDetailPage({ params }: { params: Promise<{ id: strin
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
-      </div>
+      <>
+        <Topbar title="Carregando..." back="/links" />
+        <div className="p-7 space-y-6">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </>
     );
   }
 
-  if (!data?.link) return <p className="text-muted-foreground">Link não encontrado.</p>;
+  if (!data?.link) return <div className="p-7"><p className="text-muted-foreground">Link não encontrado.</p></div>;
 
   const { link, events, lastBefore, since } = data;
   const sinceMs = new Date(since).getTime();
@@ -172,23 +176,15 @@ export default function LinkDetailPage({ params }: { params: Promise<{ id: strin
   const downtime = calcTotalDowntime(events, lastBefore, sinceMs, link.isOnline);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Link href="/links" className={buttonVariants({ variant: "ghost", size: "icon" })}>
-              <ChevronLeft className="h-4 w-4" />
-            </Link>
-            <h1 className="text-2xl font-bold">{link.name}</h1>
-            <StatusBadge isOnline={link.isOnline} />
-          </div>
-          {link.description && (
-            <p className="text-sm text-muted-foreground pl-10">{link.description}</p>
-          )}
-        </div>
-      </div>
+    <>
+      <Topbar
+        title={link.name}
+        badge={<StatusBadge isOnline={link.isOnline} />}
+        subtitle={link.description ?? undefined}
+        back="/links"
+      />
 
+    <div className="p-7 space-y-6">
       {/* Webhook URLs */}
       <Card>
         <CardHeader className="pb-2 pt-4">
@@ -362,5 +358,6 @@ export default function LinkDetailPage({ params }: { params: Promise<{ id: strin
         )}
       </div>
     </div>
+    </>
   );
 }

@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import { DeviceForm } from "@/components/device-form";
+import { Topbar } from "@/components/topbar";
 
 export default async function EditDevicePage({
   params,
@@ -13,12 +14,15 @@ export default async function EditDevicePage({
   if (!device) notFound();
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Editar Dispositivo</h1>
-        <p className="text-muted-foreground text-sm">{device.name}</p>
+    <>
+      <Topbar
+        title="Editar Dispositivo"
+        subtitle={device.name}
+        back={`/devices/${id}`}
+      />
+      <div className="p-7">
+        <DeviceForm device={device} />
       </div>
-      <DeviceForm device={device} />
-    </div>
+    </>
   );
 }

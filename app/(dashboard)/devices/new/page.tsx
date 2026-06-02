@@ -1,15 +1,17 @@
 import { DeviceForm } from "@/components/device-form";
+import { Topbar } from "@/components/topbar";
 
 export default function NewDevicePage() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Novo Dispositivo</h1>
-        <p className="text-muted-foreground text-sm">
-          Cadastre um novo equipamento para monitoramento
-        </p>
+    <>
+      <Topbar
+        title="Novo Dispositivo"
+        subtitle="Cadastre um novo equipamento para monitoramento"
+        back="/devices"
+      />
+      <div className="p-7">
+        <DeviceForm />
       </div>
-      <DeviceForm />
-    </div>
+    </>
   );
 }

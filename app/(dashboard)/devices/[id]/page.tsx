@@ -23,7 +23,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Pencil, Trash2, ChevronLeft, Cpu, MemoryStick, Clock, Wifi, Globe, Activity } from "lucide-react";
+import { Topbar } from "@/components/topbar";
+import { Pencil, Trash2, Cpu, MemoryStick, Clock, Wifi, Globe, Activity } from "lucide-react";
 import { toast } from "sonner";
 import type { Device, DeviceStatus, StatusHistory } from "@prisma/client";
 
@@ -71,73 +72,61 @@ export default function DeviceDetailPage({
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-48" />
-        <div className="grid grid-cols-2 gap-4">
-          <Skeleton className="h-40" />
-          <Skeleton className="h-40" />
+      <>
+        <Topbar title="Carregando..." back="/devices" />
+        <div className="p-7 space-y-6">
+          <Skeleton className="h-8 w-48" />
+          <div className="grid grid-cols-2 gap-4">
+            <Skeleton className="h-40" />
+            <Skeleton className="h-40" />
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
-  if (!device) return <p className="text-muted-foreground">Dispositivo não encontrado.</p>;
+  if (!device) return <div className="p-7"><p className="text-muted-foreground">Dispositivo não encontrado.</p></div>;
 
   const status = device.currentStatus;
   const hasMikrotikMetrics = status?.uptime != null || status?.cpuLoad != null;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Link href="/devices" className={buttonVariants({ variant: "ghost", size: "icon" })}>
-              <ChevronLeft className="h-4 w-4" />
-            </Link>
-            <h1 className="text-2xl font-bold">{device.name}</h1>
-            <StatusBadge isOnline={status?.isOnline ?? false} />
-          </div>
-          <div className="flex items-center gap-2 pl-10">
-            <code className="text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded">
-              {device.ip}
-            </code>
-            <DeviceTypeBadge type={device.type} />
-            {device.location && (
-              <span className="text-sm text-muted-foreground">{device.location}</span>
-            )}
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Link href={`/devices/${id}/edit`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-            <Pencil className="h-4 w-4 mr-1" />
-            Editar
-          </Link>
-          <AlertDialog>
-            <AlertDialogTrigger
-              render={
-                <Button variant="destructive" size="sm">
-                  <Trash2 className="h-4 w-4 mr-1" />
-                  Remover
-                </Button>
-              }
-            />
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Remover dispositivo?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Todo o histórico de monitoramento será apagado. Esta ação não pode ser desfeita.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete}>Remover</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </div>
+    <>
+      <Topbar
+        title={device.name}
+        badge={<StatusBadge isOnline={status?.isOnline ?? false} />}
+        subtitle={`${device.ip}${device.location ? ` · ${device.location}` : ''}`}
+        back="/devices"
+      >
+        <Link href={`/devices/${id}/edit`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <Pencil className="h-4 w-4 mr-1" />
+          Editar
+        </Link>
+        <AlertDialog>
+          <AlertDialogTrigger
+            render={
+              <Button variant="destructive" size="sm">
+                <Trash2 className="h-4 w-4 mr-1" />
+                Remover
+              </Button>
+            }
+          />
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remover dispositivo?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Todo o histórico de monitoramento será apagado. Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete}>Remover</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </Topbar>
 
+    <div className="p-7 space-y-6">
       {/* Metrics cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <MetricCard
@@ -266,6 +255,7 @@ export default function DeviceDetailPage({
         </>
       )}
     </div>
+    </>
   );
 }
 
