@@ -6,11 +6,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { RefreshCw, Plus, Wifi, WifiOff, Server } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { StatusBadge } from "@/components/status-badge";
+import { RefreshCw, Plus, Wifi, WifiOff, Server, Network } from "lucide-react";
 import Link from "next/link";
 import type { Device, DeviceStatus, DeviceType } from "@prisma/client";
 
 type DeviceWithStatus = Device & { currentStatus: DeviceStatus | null };
+
+interface LinkItem {
+  id: string;
+  name: string;
+  description: string | null;
+  isOnline: boolean;
+  lastEventAt: string | null;
+}
 
 const TYPE_LABELS: Record<DeviceType | "ALL", string> = {
   ALL: "Todos",
@@ -22,18 +32,20 @@ const TYPE_LABELS: Record<DeviceType | "ALL", string> = {
 
 export default function OverviewPage() {
   const [devices, setDevices] = useState<DeviceWithStatus[]>([]);
+  const [links, setLinks] = useState<LinkItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<DeviceType | "ALL">("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ONLINE" | "OFFLINE">("ALL");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   async function load() {
-    const res = await fetch("/api/devices");
-    if (res.ok) {
-      const data = await res.json();
-      setDevices(data);
-      setLastUpdated(new Date());
-    }
+    const [devRes, linkRes] = await Promise.all([
+      fetch("/api/devices"),
+      fetch("/api/links"),
+    ]);
+    if (devRes.ok) setDevices(await devRes.json());
+    if (linkRes.ok) setLinks(await linkRes.json());
+    setLastUpdated(new Date());
     setLoading(false);
   }
 
@@ -123,7 +135,7 @@ export default function OverviewPage() {
         ))}
       </div>
 
-      {/* Grid */}
+      {/* Devices grid */}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -149,6 +161,54 @@ export default function OverviewPage() {
           {filtered.map((device) => (
             <DeviceCard key={device.id} device={device} />
           ))}
+        </div>
+      )}
+
+      {/* Links de Internet */}
+      {(loading || links.length > 0) && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+              <Network className="h-4 w-4" />
+              Links de Internet
+            </h2>
+            <Link href="/links" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              Ver todos →
+            </Link>
+          </div>
+
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {links.map((link) => (
+                <Link key={link.id} href={`/links/${link.id}`} className="block">
+                  <Card className={`border-l-4 hover:bg-muted/40 transition-colors ${link.isOnline ? "border-l-success" : "border-l-destructive"}`}>
+                    <CardContent className="py-3 px-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm truncate">{link.name}</p>
+                          {link.description && (
+                            <p className="text-xs text-muted-foreground truncate">{link.description}</p>
+                          )}
+                          {link.lastEventAt && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {new Date(link.lastEventAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                            </p>
+                          )}
+                        </div>
+                        <StatusBadge isOnline={link.isOnline} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
