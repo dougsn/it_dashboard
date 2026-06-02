@@ -1,24 +1,43 @@
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+
+type StatusValue = "online" | "offline" | "degraded";
 
 interface StatusBadgeProps {
   isOnline: boolean;
+  degraded?: boolean;
   className?: string;
 }
 
-export function StatusBadge({ isOnline, className }: StatusBadgeProps) {
+const STATUS_STYLES: Record<StatusValue, string> = {
+  online:   "bg-success/10 text-success border border-success/20",
+  offline:  "bg-destructive/10 text-destructive border border-destructive/20",
+  degraded: "bg-warning/10 text-warning border border-warning/20",
+};
+
+const STATUS_LABELS: Record<StatusValue, string> = {
+  online:   "Online",
+  offline:  "Offline",
+  degraded: "Instável",
+};
+
+export function StatusBadge({ isOnline, degraded = false, className }: StatusBadgeProps) {
+  const status: StatusValue = isOnline ? (degraded ? "degraded" : "online") : "offline";
+
   return (
-    <Badge
-      variant={isOnline ? "default" : "destructive"}
-      className={cn("gap-1.5", className)}
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold",
+        STATUS_STYLES[status],
+        className
+      )}
     >
       <span
         className={cn(
-          "h-1.5 w-1.5 rounded-full bg-current opacity-70",
-          isOnline && "animate-pulse"
+          "relative h-1.5 w-1.5 rounded-full bg-current",
+          status === "online" && "animate-ping-dot"
         )}
       />
-      {isOnline ? "Online" : "Offline"}
-    </Badge>
+      {STATUS_LABELS[status]}
+    </span>
   );
 }
