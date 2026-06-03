@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Server, Network, StickyNote, LogOut } from "lucide-react";
+import { LayoutDashboard, Server, Network, StickyNote, LogOut, AlertCircle } from "lucide-react";
 
 interface SidebarCounts {
   devicesTotal: number;
@@ -195,6 +195,14 @@ export function Sidebar({ userName = "Usuário" }: { userName?: string }) {
               ? `${counts.linksOnline}/${counts.linksTotal}`
               : undefined
           }
+        />
+
+        <NavItem
+          href="/incidents"
+          label="Incidentes"
+          icon={AlertCircle}
+          active={pathname.startsWith("/incidents")}
+          alertBadge={counts.devicesOffline}
         />
 
         <NavSectionLabel>Sistema</NavSectionLabel>
