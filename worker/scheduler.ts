@@ -3,7 +3,8 @@ import { checkPing } from "./monitors/ping";
 import { checkHttp } from "./monitors/http";
 import { checkSnmp } from "./monitors/snmp";
 import { checkRouterOS } from "./monitors/routeros";
-import type { Device } from "@prisma/client";
+import { checkLinkTraffic } from "./monitors/link-traffic";
+import type { Device, Link } from "@prisma/client";
 
 const timers = new Map<string, ReturnType<typeof setInterval>>();
 
@@ -77,12 +78,47 @@ function unscheduleDevice(deviceId: string) {
   }
 }
 
+async function runLinkChecks(link: Link & { mikrotikDevice: Device | null }) {
+  if (!link.mikrotikDevice || !link.mikrotikInterface) return;
+
+  const dev = link.mikrotikDevice;
+  if (!dev.routerosUser || !dev.routerosPass) return;
+
+  try {
+    const result = await checkLinkTraffic(
+      dev.ip,
+      dev.routerosUser,
+      dev.routerosPass,
+      dev.routerosPort,
+      link.mikrotikInterface,
+    );
+
+    await db.link.update({
+      where: { id: link.id },
+      data: {
+        downloadBps: result.downloadBps,
+        uploadBps:   result.uploadBps,
+      },
+    });
+
+    console.log(
+      `[Link] ${link.name} — ↓ ${(result.downloadBps / 1_000_000).toFixed(1)} Mbps  ↑ ${(result.uploadBps / 1_000_000).toFixed(1)} Mbps`,
+    );
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[Link] ${link.name} (${dev.ip}/${link.mikrotikInterface}):`, msg);
+  }
+}
+
 export async function startScheduler() {
   console.log("Worker iniciado. Carregando dispositivos...");
 
   const devices = await db.device.findMany();
   devices.forEach(scheduleDevice);
   console.log(`${devices.length} dispositivo(s) agendado(s).`);
+
+  // Initial link traffic poll
+  void pollLinks();
 
   // Poll for device changes every 30s
   setInterval(async () => {
@@ -106,4 +142,16 @@ export async function startScheduler() {
       }
     }
   }, 30_000);
+
+  // Poll link traffic every 60s
+  setInterval(pollLinks, 60_000);
+}
+
+async function pollLinks() {
+  const links = await db.link.findMany({
+    where: { mikrotikDeviceId: { not: null }, mikrotikInterface: { not: null } },
+    include: { mikrotikDevice: true },
+  });
+
+  await Promise.allSettled(links.map(runLinkChecks));
 }
