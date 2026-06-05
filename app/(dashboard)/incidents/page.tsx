@@ -16,7 +16,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import type { DeviceType } from "@prisma/client";
-import type { Incident } from "@/app/api/incidents/route";
+import type { Incident, PaginatedIncidentsResponse } from "@/app/api/incidents/route";
 
 const TYPE_ICON: Record<DeviceType, React.ElementType> = {
   MIKROTIK: Router,
@@ -106,21 +106,40 @@ function groupByDay(incidents: Incident[]) {
   return groups;
 }
 
+const PAGE_LIMIT = 25;
+
 export default function IncidentsPage() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [window, setWindow] = useState<Window>(168);
   const [statusFilter, setStatusFilter] = useState<"ALL" | "OPEN" | "RESOLVED">("ALL");
   const [drawerDeviceId, setDrawerDeviceId] = useState<string | null>(null);
 
-  useEffect(() => {
-    setLoading(true);
-    fetch(`/api/incidents?hours=${window}`)
+  const fetchPage = (hours: number, p: number, replace: boolean) => {
+    if (replace) setLoading(true);
+    else setLoadingMore(true);
+
+    fetch(`/api/incidents?hours=${hours}&page=${p}&limit=${PAGE_LIMIT}`)
       .then((r) => r.json())
-      .then((data) => {
-        setIncidents(Array.isArray(data) ? data : []);
+      .then((data: PaginatedIncidentsResponse) => {
+        setIncidents((prev) => replace ? (data.data ?? []) : [...prev, ...(data.data ?? [])]);
+        setTotal(data.total ?? 0);
+        setHasMore(data.hasMore ?? false);
+        setPage(p);
+      })
+      .finally(() => {
         setLoading(false);
+        setLoadingMore(false);
       });
+  };
+
+  useEffect(() => {
+    fetchPage(window, 1, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [window]);
 
   const filtered = incidents.filter((inc) => {
@@ -141,7 +160,7 @@ export default function IncidentsPage() {
         icon={AlertCircle}
         subtitle={
           !loading
-            ? `${openCount} em aberto · ${resolvedCount} resolvidos`
+            ? `${openCount} em aberto · ${resolvedCount} resolvidos${total > incidents.length ? ` · ${total} no total` : ""}`
             : undefined
         }
         live={!loading && openCount > 0}
@@ -301,6 +320,18 @@ export default function IncidentsPage() {
           </div>
         )}
       </div>
+
+      {hasMore && (
+        <div className="flex justify-center pb-8">
+          <button
+            onClick={() => fetchPage(window, page + 1, false)}
+            disabled={loadingMore}
+            className="px-5 h-9 rounded-full text-sm font-medium border border-border bg-background hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            {loadingMore ? "Carregando..." : `Carregar mais (${total - incidents.length} restantes)`}
+          </button>
+        </div>
+      )}
 
       <DeviceDetailDrawer deviceId={drawerDeviceId} onClose={() => setDrawerDeviceId(null)} />
     </>
