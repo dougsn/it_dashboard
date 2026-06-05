@@ -54,7 +54,7 @@ export async function GET() {
       if (inSeg.length === 0) {
         // Use last known state before this segment
         const before = events.filter((e) => new Date(e.timestamp).getTime() < segStart);
-        if (before.length === 0) return "empty";
+        if (before.length === 0) return link.isOnline ? "online" : "offline";
         return before[before.length - 1].type === "UP" ? "online" : "offline";
       }
 
