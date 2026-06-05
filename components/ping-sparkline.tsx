@@ -16,6 +16,10 @@ interface Props {
   showTooltip?: boolean;
   /** timestamp labels shown in the tooltip, one per data point */
   labels?: string[];
+  /** unit appended to value in tooltip (default "ms") */
+  unit?: string;
+  /** decimal places for tooltip value (default 0) */
+  decimals?: number;
 }
 
 type Seg = "online" | "unstable" | "offline";
@@ -34,12 +38,12 @@ function classify(v: number | null, threshold: number): Seg {
 
 // SVG tooltip bubble rendered inside the chart
 function TooltipBubble({
-  x, y, value, label, color, chartW, chartH,
+  x, y, value, label, color, chartW, chartH, unit, decimals,
 }: {
   x: number; y: number; value: number | null; label?: string;
-  color: string; chartW: number; chartH: number;
+  color: string; chartW: number; chartH: number; unit: string; decimals: number;
 }) {
-  const text1 = value != null ? `${value}ms` : "Offline";
+  const text1 = value != null ? `${value.toFixed(decimals)}${unit}` : "Offline";
   const hasLabel = !!label;
   const bw = Math.max(text1.length * 6, hasLabel ? (label?.length ?? 0) * 5 : 0) + 16;
   const bh = hasLabel ? 28 : 16;
@@ -73,6 +77,8 @@ export function PingSparkline({
   responsive = false,
   showTooltip = false,
   labels,
+  unit = "ms",
+  decimals = 0,
 }: Props) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
@@ -200,6 +206,7 @@ export function PingSparkline({
                 label={labels?.[hoveredIdx!]}
                 color={SEG_STROKE[hovered.seg]}
                 chartW={W} chartH={H}
+                unit={unit} decimals={decimals}
               />
             </g>
           )}

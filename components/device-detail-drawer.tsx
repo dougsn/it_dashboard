@@ -62,7 +62,7 @@ function MetricTile({ label, value, unit, loading }: {
 }) {
   return (
     <div className="rounded-xl border border-border bg-muted/30 p-3.5">
-      <p className="text-[9.5px] font-bold uppercase tracking-[.1em] text-muted-foreground mb-2">
+      <p className="text-[9.5px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
         {label}
       </p>
       {loading ? <Skeleton className="h-7 w-16" /> : (
@@ -150,11 +150,13 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
   const status = device?.currentStatus;
   const TypeIcon = device ? TYPE_ICON[device.type] : Box;
 
-  // Sparkline data: null when offline, pingMs when online
-  const sparklineData = history.map((h) => (h.isOnline ? (h.pingMs ?? null) : null));
-  const sparklineLabels = history.map((h) =>
+  const timeLabels = history.map((h) =>
     new Date(h.timestamp).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
   );
+
+  const sparklineData   = history.map((h) => (h.isOnline ? (h.pingMs ?? null) : null));
+  const cpuSparkline    = history.map((h) => h.cpuLoad ?? null);
+  const memorySparkline = history.map((h) => h.memoryUsed ?? null);
 
   const segments = buildSegments(history);
 
@@ -231,7 +233,7 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
           {/* Latency chart */}
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[9.5px] font-bold uppercase tracking-[.1em] text-muted-foreground">
+              <p className="text-[9.5px] font-bold uppercase tracking-widest text-muted-foreground">
                 Latência
               </p>
               <div className="flex items-center gap-0.5">
@@ -256,7 +258,7 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
               <div className="w-full rounded-xl overflow-hidden border border-border bg-muted/20 px-2 pt-2 pb-1">
                 <PingSparkline
                   data={sparklineData}
-                  labels={sparklineLabels}
+                  labels={timeLabels}
                   uid={`drawer-${deviceId}`}
                   responsive
                   width={380}
@@ -271,15 +273,76 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
             )}
           </div>
 
+          {/* CPU + Memory charts — Mikrotik/SNMP/RouterOS only */}
+          {device && (device.snmpEnabled || device.routerosEnabled) && (
+            <>
+              <div className="space-y-2">
+                <p className="text-[9.5px] font-bold uppercase tracking-widest text-muted-foreground">
+                  CPU (%)
+                </p>
+                {loading ? (
+                  <Skeleton className="h-24 w-full rounded-xl" />
+                ) : cpuSparkline.some((v) => v !== null) && cpuSparkline.length >= 3 ? (
+                  <div className="w-full rounded-xl overflow-hidden border border-border bg-muted/20 px-2 pt-2 pb-1">
+                    <PingSparkline
+                      data={cpuSparkline}
+                      labels={timeLabels}
+                      uid={`drawer-cpu-${deviceId}`}
+                      threshold={80}
+                      responsive
+                      width={380}
+                      height={88}
+                      showTooltip
+                      unit="%"
+                      decimals={2}
+                    />
+                  </div>
+                ) : (
+                  <div className="h-24 rounded-xl border border-border bg-muted/20 flex items-center justify-center">
+                    <p className="text-xs text-muted-foreground">Sem dados para o período</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[9.5px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Memória (%)
+                </p>
+                {loading ? (
+                  <Skeleton className="h-24 w-full rounded-xl" />
+                ) : memorySparkline.some((v) => v !== null) && memorySparkline.length >= 3 ? (
+                  <div className="w-full rounded-xl overflow-hidden border border-border bg-muted/20 px-2 pt-2 pb-1">
+                    <PingSparkline
+                      data={memorySparkline}
+                      labels={timeLabels}
+                      uid={`drawer-mem-${deviceId}`}
+                      threshold={80}
+                      responsive
+                      width={380}
+                      height={88}
+                      showTooltip
+                      unit="%"
+                      decimals={2}
+                    />
+                  </div>
+                ) : (
+                  <div className="h-24 rounded-xl border border-border bg-muted/20 flex items-center justify-center">
+                    <p className="text-xs text-muted-foreground">Sem dados para o período</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
           {/* Availability bar */}
           <div className="space-y-2">
-            <p className="text-[9.5px] font-bold uppercase tracking-[.1em] text-muted-foreground">
+            <p className="text-[9.5px] font-bold uppercase tracking-widest text-muted-foreground">
               Disponibilidade (24h)
             </p>
             {loading ? (
               <Skeleton className="h-5 w-full rounded" />
             ) : (
-              <div className="flex gap-[2px]">
+              <div className="flex gap-0.5">
                 {segments.map((s, i) => (
                   <div key={i} className={`flex-1 h-5 rounded-[3px] ${SEG_COLOR[s]}`} />
                 ))}
@@ -289,7 +352,7 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
 
           {/* Device info table */}
           <div className="space-y-0.5">
-            <p className="text-[9.5px] font-bold uppercase tracking-[.1em] text-muted-foreground mb-1">
+            <p className="text-[9.5px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
               Informações do dispositivo
             </p>
             {loading ? (
