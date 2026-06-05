@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Plus,
+  Layers,
   Pencil,
   MapPin,
   Server,
@@ -17,6 +18,9 @@ import {
   Box,
   Wifi,
   WifiOff,
+  ChevronsUpDown,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { Topbar } from "@/components/topbar";
 import { formatResponseTime, formatUptime, formatPercent } from "@/lib/format";
@@ -70,6 +74,50 @@ interface FilterChipProps {
   color?: "default" | "success" | "destructive";
 }
 
+type SortField = "name" | "ip" | "status" | "ping" | "location";
+type SortDir = "asc" | "desc";
+
+function SortableHeader({
+  field,
+  label,
+  sortField,
+  sortDir,
+  onSort,
+  className,
+}: {
+  field: SortField;
+  label: string;
+  sortField: SortField;
+  sortDir: SortDir;
+  onSort: (f: SortField) => void;
+  className?: string;
+}) {
+  const active = sortField === field;
+  return (
+    <th className={className}>
+      <button
+        onClick={() => onSort(field)}
+        className={`inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide transition-colors select-none ${
+          active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        {label}
+        <span className="shrink-0">
+          {active ? (
+            sortDir === "asc" ? (
+              <ChevronUp className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5" />
+            )
+          ) : (
+            <ChevronsUpDown className="h-3.5 w-3.5 opacity-40" />
+          )}
+        </span>
+      </button>
+    </th>
+  );
+}
+
 function FilterChip({ active, onClick, children, color = "default" }: FilterChipProps) {
   const activeClass =
     color === "success"
@@ -98,6 +146,17 @@ export default function DevicesPage() {
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ONLINE" | "OFFLINE">("ALL");
   const [typeFilter, setTypeFilter] = useState<DeviceType | "ALL">("ALL");
   const [drawerDeviceId, setDrawerDeviceId] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  function handleSort(field: SortField) {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  }
 
   async function load() {
     const res = await fetch("/api/devices");
@@ -111,18 +170,56 @@ export default function DevicesPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const filtered = devices.filter((d) => {
-    const statusMatch =
-      statusFilter === "ALL" ||
-      (statusFilter === "ONLINE" && (d.currentStatus?.isOnline ?? false)) ||
-      (statusFilter === "OFFLINE" && !(d.currentStatus?.isOnline ?? false));
-    const typeMatch = typeFilter === "ALL" || d.type === typeFilter;
-    return statusMatch && typeMatch;
-  });
+  const filtered = devices
+    .filter((d) => {
+      const statusMatch =
+        statusFilter === "ALL" ||
+        (statusFilter === "ONLINE" && (d.currentStatus?.isOnline ?? false)) ||
+        (statusFilter === "OFFLINE" && !(d.currentStatus?.isOnline ?? false));
+      const typeMatch = typeFilter === "ALL" || d.type === typeFilter;
+      return statusMatch && typeMatch;
+    })
+    .sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case "name":
+          cmp = a.name.localeCompare(b.name, "pt-BR");
+          break;
+        case "ip": {
+          const toInt = (ip: string) =>
+            ip.split(".").reduce((acc, oct) => (acc << 8) | parseInt(oct), 0) >>> 0;
+          cmp = toInt(a.ip) - toInt(b.ip);
+          break;
+        }
+        case "status": {
+          const aOn = a.currentStatus?.isOnline ? 1 : 0;
+          const bOn = b.currentStatus?.isOnline ? 1 : 0;
+          cmp = bOn - aOn; // online primeiro quando asc
+          break;
+        }
+        case "ping": {
+          const ap = a.currentStatus?.pingMs ?? Infinity;
+          const bp = b.currentStatus?.pingMs ?? Infinity;
+          cmp = ap - bp;
+          break;
+        }
+        case "location":
+          cmp = (a.location ?? "").localeCompare(b.location ?? "", "pt-BR");
+          break;
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
 
   return (
     <>
       <Topbar title="Dispositivos" icon={Server} live={!loading}>
+        <Link
+          href="/devices/new/bulk"
+          className={buttonVariants({ size: "sm", variant: "outline" })}
+        >
+          <Layers className="h-4 w-4 mr-1" />
+          Em lote
+        </Link>
         <Link href="/devices/new" className={buttonVariants({ size: "sm" })}>
           <Plus className="h-4 w-4 mr-1" />
           Novo
@@ -200,27 +297,37 @@ export default function DevicesPage() {
             <table className="w-full text-sm">
               <thead className="border-b bg-muted/40">
                 <tr>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Dispositivo
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    IP
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Status
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Ping
-                  </th>
+                  <SortableHeader
+                    field="name" label="Dispositivo"
+                    sortField={sortField} sortDir={sortDir} onSort={handleSort}
+                    className="text-left px-4 py-3"
+                  />
+                  <SortableHeader
+                    field="ip" label="IP"
+                    sortField={sortField} sortDir={sortDir} onSort={handleSort}
+                    className="text-left px-4 py-3"
+                  />
+                  <SortableHeader
+                    field="status" label="Status"
+                    sortField={sortField} sortDir={sortDir} onSort={handleSort}
+                    className="text-left px-4 py-3"
+                  />
+                  <SortableHeader
+                    field="ping" label="Ping"
+                    sortField={sortField} sortDir={sortDir} onSort={handleSort}
+                    className="text-left px-4 py-3"
+                  />
                   <th className="hidden md:table-cell text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     CPU
                   </th>
                   <th className="hidden lg:table-cell text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Uptime
                   </th>
-                  <th className="hidden sm:table-cell text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Local
-                  </th>
+                  <SortableHeader
+                    field="location" label="Local"
+                    sortField={sortField} sortDir={sortDir} onSort={handleSort}
+                    className="hidden sm:table-cell text-left px-4 py-3"
+                  />
                   <th className="text-right px-4 py-3" />
                 </tr>
               </thead>
