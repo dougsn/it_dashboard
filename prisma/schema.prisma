@@ -98,6 +98,10 @@ model Link {
   mikrotikDeviceId  String?
   mikrotikInterface String?
 
+  // Contracted bandwidth (configured manually, in bps)
+  contractedDownloadBps Int?
+  contractedUploadBps   Int?
+
   // Latest traffic stats (updated by worker)
   downloadBps Int?
   uploadBps   Int?

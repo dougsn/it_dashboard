@@ -49,6 +49,30 @@ function formatBps(bps: number | null): string {
   return `${bps} bps`;
 }
 
+function BandwidthCell({ current, contracted, color }: {
+  current: number | null;
+  contracted: number | null;
+  color: "success" | "primary";
+}) {
+  if (current == null) return <span className="text-muted-foreground/40 text-xs">—</span>;
+  const pct = contracted && contracted > 0 ? Math.min((current / contracted) * 100, 100) : null;
+  const barColor = pct == null ? "" : pct >= 90 ? "bg-destructive" : pct >= 70 ? "bg-warning" : color === "success" ? "bg-success" : "bg-primary";
+  const textColor = color === "success" ? "text-success" : "text-primary";
+  return (
+    <div className="inline-flex flex-col items-end gap-0.5 min-w-18">
+      <span className={`font-mono text-xs font-semibold ${textColor}`}>{formatBps(current)}</span>
+      {contracted != null && (
+        <>
+          <span className="text-[10px] text-muted-foreground font-mono">/ {formatBps(contracted)}</span>
+          <div className="w-full h-1 rounded-full bg-muted overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 interface LinkItem {
   id: string;
   name: string;
@@ -59,6 +83,8 @@ interface LinkItem {
   createdAt: string;
   downloadBps: number | null;
   uploadBps: number | null;
+  contractedDownloadBps: number | null;
+  contractedUploadBps: number | null;
   mikrotikDeviceId: string | null;
   mikrotikInterface: string | null;
   _count: { events: number };
@@ -76,6 +102,8 @@ const formSchema = z.object({
   location: z.string().max(100).optional().nullable(),
   mikrotikDeviceId: z.string().optional().nullable(),
   mikrotikInterface: z.string().max(50).optional().nullable(),
+  contractedDownloadMbps: z.number().positive("Deve ser maior que 0").optional().nullable(),
+  contractedUploadMbps: z.number().positive("Deve ser maior que 0").optional().nullable(),
 });
 type FormValues = z.infer<typeof formSchema>;
 
@@ -152,7 +180,7 @@ export default function LinksPage() {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { name: "", description: "", location: "", mikrotikDeviceId: "", mikrotikInterface: "" },
+    defaultValues: { name: "", description: "", location: "", mikrotikDeviceId: "", mikrotikInterface: "", contractedDownloadMbps: null, contractedUploadMbps: null },
   });
 
   useEffect(() => {
@@ -181,7 +209,7 @@ export default function LinksPage() {
   function openCreate() {
     setEditing(null);
     setTrafficTest({ state: "idle" });
-    form.reset({ name: "", description: "", location: "", mikrotikDeviceId: "", mikrotikInterface: "" });
+    form.reset({ name: "", description: "", location: "", mikrotikDeviceId: "", mikrotikInterface: "", contractedDownloadMbps: null, contractedUploadMbps: null });
     setDialogOpen(true);
   }
 
@@ -195,6 +223,8 @@ export default function LinksPage() {
       location: link.location ?? "",
       mikrotikDeviceId: link.mikrotikDeviceId ?? "",
       mikrotikInterface: link.mikrotikInterface ?? "",
+      contractedDownloadMbps: link.contractedDownloadBps != null ? link.contractedDownloadBps / 1_000_000 : null,
+      contractedUploadMbps: link.contractedUploadBps != null ? link.contractedUploadBps / 1_000_000 : null,
     });
     setDialogOpen(true);
   }
@@ -240,10 +270,18 @@ export default function LinksPage() {
     try {
       const url = editing ? `/api/links/${editing.id}` : "/api/links";
       const method = editing ? "PUT" : "POST";
+      const { contractedDownloadMbps, contractedUploadMbps, ...rest } = values;
+      const toValidBps = (v: number | null | undefined) =>
+        v != null && !isNaN(v) && v > 0 ? Math.round(v * 1_000_000) : null;
+      const payload = {
+        ...rest,
+        contractedDownloadBps: toValidBps(contractedDownloadMbps),
+        contractedUploadBps: toValidBps(contractedUploadMbps),
+      };
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
       toast.success(editing ? "Link atualizado" : "Link criado");
@@ -405,17 +443,13 @@ export default function LinksPage() {
                     </td>
 
                     {/* Download */}
-                    <td className="hidden sm:table-cell px-4 py-3 text-right font-mono text-xs font-semibold text-success">
-                      {link.downloadBps != null
-                        ? formatBps(link.downloadBps)
-                        : <span className="text-muted-foreground/40 font-normal">—</span>}
+                    <td className="hidden sm:table-cell px-4 py-3 text-right">
+                      <BandwidthCell current={link.downloadBps} contracted={link.contractedDownloadBps} color="success" />
                     </td>
 
                     {/* Upload */}
-                    <td className="hidden sm:table-cell px-4 py-3 text-right font-mono text-xs font-semibold text-primary">
-                      {link.uploadBps != null
-                        ? formatBps(link.uploadBps)
-                        : <span className="text-muted-foreground/40 font-normal">—</span>}
+                    <td className="hidden sm:table-cell px-4 py-3 text-right">
+                      <BandwidthCell current={link.uploadBps} contracted={link.contractedUploadBps} color="primary" />
                     </td>
 
                     {/* Webhooks */}
@@ -493,6 +527,45 @@ export default function LinksPage() {
               <div className="space-y-1.5">
                 <Label htmlFor="description">Descrição (opcional)</Label>
                 <Input id="description" {...form.register("description")} placeholder="Provedor, contrato..." />
+              </div>
+            </div>
+
+            {/* Banda contratada */}
+            <div className="rounded-lg border border-border/60 bg-muted/20 p-3.5 space-y-3">
+              <p className="text-xs font-semibold flex items-center gap-1.5 text-muted-foreground">
+                <Activity className="h-3.5 w-3.5" />Banda contratada (opcional)
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="contractedDownloadMbps">
+                    <ArrowDown className="inline h-3 w-3 mr-0.5 text-success" />Download (Mbps)
+                  </Label>
+                  <Input
+                    id="contractedDownloadMbps"
+                    type="number"
+                    step="any"
+                    placeholder="ex: 100"
+                    {...form.register("contractedDownloadMbps", { valueAsNumber: true })}
+                  />
+                  {form.formState.errors.contractedDownloadMbps && (
+                    <p className="text-xs text-destructive">{form.formState.errors.contractedDownloadMbps.message}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="contractedUploadMbps">
+                    <ArrowUp className="inline h-3 w-3 mr-0.5 text-primary" />Upload (Mbps)
+                  </Label>
+                  <Input
+                    id="contractedUploadMbps"
+                    type="number"
+                    step="any"
+                    placeholder="ex: 50"
+                    {...form.register("contractedUploadMbps", { valueAsNumber: true })}
+                  />
+                  {form.formState.errors.contractedUploadMbps && (
+                    <p className="text-xs text-destructive">{form.formState.errors.contractedUploadMbps.message}</p>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -9,6 +9,8 @@ const updateSchema = z.object({
   location: z.string().max(100).optional().nullable(),
   mikrotikDeviceId: z.string().optional().nullable(),
   mikrotikInterface: z.string().max(50).optional().nullable(),
+  contractedDownloadBps: z.number().int().positive().optional().nullable(),
+  contractedUploadBps: z.number().int().positive().optional().nullable(),
 });
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
