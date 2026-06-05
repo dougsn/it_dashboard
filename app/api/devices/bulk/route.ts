@@ -1,28 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { z } from "zod";
-
-const bulkSchema = z.object({
-  name: z.string().min(1),
-  ipStart: z.string().min(1),
-  ipEnd: z.string().min(1),
-  type: z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER"]),
-  location: z.string().optional(),
-  notes: z.string().optional(),
-  pingEnabled: z.boolean().default(true),
-  httpEnabled: z.boolean().default(false),
-  httpPort: z.number().optional().nullable(),
-  httpPath: z.string().default("/"),
-  snmpEnabled: z.boolean().default(false),
-  snmpCommunity: z.string().default("public"),
-  snmpPort: z.number().default(161),
-  routerosEnabled: z.boolean().default(false),
-  routerosUser: z.string().optional().nullable(),
-  routerosPass: z.string().optional().nullable(),
-  routerosPort: z.number().default(8728),
-  checkInterval: z.number().default(60),
-});
+import { bulkDeviceSchema } from "@/lib/schemas/device";
 
 function ipToInt(ip: string): number | null {
   const parts = ip.split(".").map(Number);
@@ -44,7 +23,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const parsed = bulkSchema.safeParse(body);
+  const parsed = bulkDeviceSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
@@ -72,7 +51,11 @@ export async function POST(req: NextRequest) {
   }
 
   const devices = await db.device.createMany({
-    data: ips.map((ip) => ({ ...config, name, ip })),
+    data: ips.map((ip) => ({
+      ...config,
+      ip,
+      name: `${name} ${ip.split(".").pop()}`,
+    })),
     skipDuplicates: true,
   });
 

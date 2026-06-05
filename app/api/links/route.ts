@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
+import { generateWebhookToken } from "@/lib/webhook";
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
@@ -21,7 +22,13 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { events: true } } },
   });
-  return NextResponse.json(links);
+
+  const withTokens = links.map((link) => ({
+    ...link,
+    webhookToken: generateWebhookToken(link.id),
+  }));
+
+  return NextResponse.json(withTokens);
 }
 
 export async function POST(req: Request) {

@@ -6,7 +6,10 @@ import { checkRouterOS } from "./monitors/routeros";
 import { checkLinkTraffic } from "./monitors/link-traffic";
 import type { Device, Link } from "@prisma/client";
 
+const RETENTION_DAYS = 30;
+
 const timers = new Map<string, ReturnType<typeof setInterval>>();
+const deviceSnapshots = new Map<string, Date>(); // deviceId -> last known updatedAt
 
 async function runChecks(device: Device) {
   const results = await Promise.allSettled([
@@ -22,10 +25,10 @@ async function runChecks(device: Device) {
       : Promise.resolve(null),
   ]);
 
-  const pingResult = results[0].status === "fulfilled" ? results[0].value : null;
-  const httpResult = results[1].status === "fulfilled" ? results[1].value : null;
-  const snmpResult = results[2].status === "fulfilled" ? results[2].value : null;
-  const rosResult  = results[3].status === "fulfilled" ? results[3].value : null;
+  const pingResult     = results[0].status === "fulfilled" ? results[0].value : null;
+  const httpResult     = results[1].status === "fulfilled" ? results[1].value : null;
+  const snmpResult     = results[2].status === "fulfilled" ? results[2].value : null;
+  const routerosResult = results[3].status === "fulfilled" ? results[3].value : null;
 
   if (results[2].status === "rejected" && device.snmpEnabled) {
     console.error(`[SNMP] ${device.name} (${device.ip}):`, results[2].reason?.message ?? results[2].reason);
@@ -35,12 +38,12 @@ async function runChecks(device: Device) {
   }
 
   const isOnline = pingResult?.alive ?? httpResult?.ok ?? false;
-  const pingMs = pingResult?.alive ? pingResult.responseMs : null;
-  const httpOk = httpResult?.ok ?? null;
+  const pingMs   = pingResult?.alive ? pingResult.responseMs : null;
+  const httpOk   = httpResult?.ok ?? null;
 
-  const uptime = rosResult?.uptime ?? snmpResult?.uptime ?? null;
-  const cpuLoad = rosResult?.cpuLoad ?? snmpResult?.cpuLoad ?? null;
-  const memoryUsed = rosResult?.memoryUsed ?? snmpResult?.memoryUsed ?? null;
+  const uptime     = routerosResult?.uptime     ?? snmpResult?.uptime     ?? null;
+  const cpuLoad    = routerosResult?.cpuLoad    ?? snmpResult?.cpuLoad    ?? null;
+  const memoryUsed = routerosResult?.memoryUsed ?? snmpResult?.memoryUsed ?? null;
 
   const now = new Date();
 
@@ -62,7 +65,7 @@ async function runChecks(device: Device) {
 function scheduleDevice(device: Device) {
   if (timers.has(device.id)) clearInterval(timers.get(device.id)!);
 
-  const intervalMs = (device.checkInterval ?? 60) * 1000;
+  const intervalMs = device.checkInterval * 1000;
 
   runChecks(device).catch(() => {});
 
@@ -75,6 +78,7 @@ function unscheduleDevice(deviceId: string) {
   if (timer) {
     clearInterval(timer);
     timers.delete(deviceId);
+    deviceSnapshots.delete(deviceId);
   }
 }
 
@@ -114,18 +118,23 @@ export async function startScheduler() {
   console.log("Worker iniciado. Carregando dispositivos...");
 
   const devices = await db.device.findMany();
-  devices.forEach(scheduleDevice);
+  for (const device of devices) {
+    scheduleDevice(device);
+    deviceSnapshots.set(device.id, device.updatedAt);
+  }
   console.log(`${devices.length} dispositivo(s) agendado(s).`);
 
-  // Initial link traffic poll
   void pollLinks();
 
-  // Poll for device changes every 30s
+  // Run history pruning at startup then every 24h
+  void pruneHistory();
+  setInterval(pruneHistory, 24 * 3_600_000);
+
+  // Reconcile device list every 30s: add new, remove deleted, reschedule updated
   setInterval(async () => {
     const current = await db.device.findMany();
     const currentIds = new Set(current.map((d) => d.id));
 
-    // Remove devices that were deleted
     for (const id of timers.keys()) {
       if (!currentIds.has(id)) {
         unscheduleDevice(id);
@@ -133,17 +142,23 @@ export async function startScheduler() {
       }
     }
 
-    // Add/update devices
     for (const device of current) {
-      const existing = timers.get(device.id);
-      if (!existing) {
+      const isNew = !timers.has(device.id);
+      const lastUpdatedAt = deviceSnapshots.get(device.id);
+      const configChanged = !!lastUpdatedAt && lastUpdatedAt.getTime() !== device.updatedAt.getTime();
+
+      if (isNew || configChanged) {
         scheduleDevice(device);
-        console.log(`Novo dispositivo adicionado: ${device.name}`);
+        deviceSnapshots.set(device.id, device.updatedAt);
+        console.log(
+          isNew
+            ? `Novo dispositivo adicionado: ${device.name}`
+            : `Dispositivo atualizado, reagendando: ${device.name}`
+        );
       }
     }
   }, 30_000);
 
-  // Poll link traffic every 60s
   setInterval(pollLinks, 60_000);
 }
 
@@ -154,4 +169,15 @@ async function pollLinks() {
   });
 
   await Promise.allSettled(links.map(runLinkChecks));
+}
+
+async function pruneHistory() {
+  const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 3_600_000);
+  const [statusResult, eventResult] = await Promise.all([
+    db.statusHistory.deleteMany({ where: { timestamp: { lt: cutoff } } }),
+    db.linkEvent.deleteMany({ where: { timestamp: { lt: cutoff } } }),
+  ]);
+  console.log(
+    `[Retenção] ${statusResult.count} registros de histórico e ${eventResult.count} eventos de link removidos (anteriores a ${cutoff.toLocaleDateString("pt-BR")}).`
+  );
 }

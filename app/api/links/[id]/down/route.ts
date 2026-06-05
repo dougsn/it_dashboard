@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { verifyWebhookToken } from "@/lib/webhook";
 
-async function handleDown(id: string) {
+async function handleDown(req: Request, id: string) {
+  const url = new URL(req.url);
+  const token =
+    req.headers.get("x-webhook-token") ?? url.searchParams.get("token") ?? "";
+
+  if (!verifyWebhookToken(id, token)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const link = await db.link.findUnique({ where: { id } });
   if (!link) return NextResponse.json({ error: "Link not found" }, { status: 404 });
 
@@ -17,12 +26,12 @@ async function handleDown(id: string) {
   return NextResponse.json({ ok: true, status: "down" });
 }
 
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return handleDown(id);
+  return handleDown(req, id);
 }
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return handleDown(id);
+  return handleDown(req, id);
 }

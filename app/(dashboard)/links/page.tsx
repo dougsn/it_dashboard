@@ -87,6 +87,7 @@ interface LinkItem {
   contractedUploadBps: number | null;
   mikrotikDeviceId: string | null;
   mikrotikInterface: string | null;
+  webhookToken: string;
   _count: { events: number };
 }
 
@@ -459,11 +460,11 @@ export default function LinksPage() {
                     >
                       <div className="flex items-center gap-1">
                         <CopyIconButton
-                          text={`${origin}/api/links/${link.id}/down`}
+                          text={`${origin}/api/links/${link.id}/down?token=${link.webhookToken}`}
                           label="DOWN"
                         />
                         <CopyIconButton
-                          text={`${origin}/api/links/${link.id}/up`}
+                          text={`${origin}/api/links/${link.id}/up?token=${link.webhookToken}`}
                           label="UP"
                         />
                       </div>

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type { DeviceType } from "@prisma/client";
 
@@ -14,6 +15,9 @@ export interface Incident {
 }
 
 export async function GET(req: Request) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { searchParams } = new URL(req.url);
   const hours = Math.min(parseInt(searchParams.get("hours") ?? "168"), 720);
   const since = new Date(Date.now() - hours * 3_600_000);
