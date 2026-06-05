@@ -12,12 +12,7 @@ import {
   Router, HardDrive, Camera, Box, MapPin,
   History, Zap, X,
 } from "lucide-react";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  Tooltip,
-} from "recharts";
+import { PingSparkline } from "@/components/ping-sparkline";
 import type { Device, DeviceStatus, StatusHistory, DeviceType } from "@prisma/client";
 
 type DeviceWithStatus = Device & { currentStatus: DeviceStatus | null };
@@ -102,17 +97,26 @@ interface Props {
   onClose: () => void;
 }
 
+const HOUR_OPTIONS = [
+  { label: "1h",  value: 1   },
+  { label: "6h",  value: 6   },
+  { label: "24h", value: 24  },
+  { label: "7d",  value: 168 },
+] as const;
+type HourOption = typeof HOUR_OPTIONS[number]["value"];
+
 export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
   const [device, setDevice] = useState<DeviceWithStatus | null>(null);
   const [history, setHistory] = useState<StatusHistory[]>([]);
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [hours, setHours] = useState<HourOption>(24);
 
-  const fetchData = useCallback(async (id: string) => {
+  const fetchData = useCallback(async (id: string, h: number) => {
     setLoading(true);
     const [dev, hist] = await Promise.all([
       fetch(`/api/devices/${id}`).then((r) => r.json()),
-      fetch(`/api/status/${id}?hours=24`).then((r) => r.json()),
+      fetch(`/api/status/${id}?hours=${h}`).then((r) => r.json()),
     ]);
     setDevice(dev);
     setHistory(Array.isArray(hist) ? hist : []);
@@ -121,13 +125,13 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
 
   useEffect(() => {
     if (!deviceId) { setDevice(null); setHistory([]); return; }
-    fetchData(deviceId);
-  }, [deviceId, fetchData]);
+    fetchData(deviceId, hours);
+  }, [deviceId, hours, fetchData]);
 
   async function handleTest() {
     if (!deviceId) return;
     setTesting(true);
-    await fetchData(deviceId);
+    await fetchData(deviceId, hours);
     setTesting(false);
   }
 
@@ -146,13 +150,11 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
   const status = device?.currentStatus;
   const TypeIcon = device ? TYPE_ICON[device.type] : Box;
 
-  // Chart data
-  const chartData = history
-    .filter((h) => h.pingMs != null)
-    .map((h) => ({
-      time: new Date(h.timestamp).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-      ping: h.pingMs,
-    }));
+  // Sparkline data: null when offline, pingMs when online
+  const sparklineData = history.map((h) => (h.isOnline ? (h.pingMs ?? null) : null));
+  const sparklineLabels = history.map((h) =>
+    new Date(h.timestamp).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+  );
 
   const segments = buildSegments(history);
 
@@ -227,43 +229,47 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
           </div>
 
           {/* Latency chart */}
-          {(loading || chartData.length > 1) && (
-            <div className="space-y-2">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
               <p className="text-[9.5px] font-bold uppercase tracking-[.1em] text-muted-foreground">
-                Latência — Últimas leituras
+                Latência
               </p>
-              {loading ? (
-                <Skeleton className="h-28 w-full rounded-xl" />
-              ) : (
-                <div className="h-28 w-full rounded-xl overflow-hidden border border-border bg-muted/20 p-2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
-                      <defs>
-                        <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="var(--success)" stopOpacity={0.35} />
-                          <stop offset="95%" stopColor="var(--success)" stopOpacity={0.02} />
-                        </linearGradient>
-                      </defs>
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          if (!active || !payload?.length) return null;
-                          return (
-                            <div className="bg-popover border rounded-md px-2 py-1.5 text-xs shadow-md">
-                              <p className="font-mono font-semibold text-success">{payload[0].value}ms</p>
-                              <p className="text-muted-foreground">{payload[0].payload.time}</p>
-                            </div>
-                          );
-                        }}
-                      />
-                      <Area type="monotone" dataKey="ping"
-                        stroke="var(--success)" strokeWidth={2}
-                        fill="url(#ddGrad)" dot={false} isAnimationActive={false} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
+              <div className="flex items-center gap-0.5">
+                {HOUR_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setHours(opt.value)}
+                    className={`px-2 h-5 rounded text-[10px] font-semibold transition-colors ${
+                      hours === opt.value
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          )}
+            {loading ? (
+              <Skeleton className="h-24 w-full rounded-xl" />
+            ) : sparklineData.length >= 3 ? (
+              <div className="w-full rounded-xl overflow-hidden border border-border bg-muted/20 px-2 pt-2 pb-1">
+                <PingSparkline
+                  data={sparklineData}
+                  labels={sparklineLabels}
+                  uid={`drawer-${deviceId}`}
+                  responsive
+                  width={380}
+                  height={88}
+                  showTooltip
+                />
+              </div>
+            ) : (
+              <div className="h-24 rounded-xl border border-border bg-muted/20 flex items-center justify-center">
+                <p className="text-xs text-muted-foreground">Sem dados para o período</p>
+              </div>
+            )}
+          </div>
 
           {/* Availability bar */}
           <div className="space-y-2">
