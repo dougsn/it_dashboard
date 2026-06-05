@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useCallback, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { StatusBadge } from "@/components/status-badge";
-import { DeviceTypeBadge } from "@/components/device-type-badge";
 import { MetricsChart } from "@/components/metrics-chart";
+import { PingChart } from "@/components/ping-chart";
 import { formatUptime, formatResponseTime, formatPercent } from "@/lib/format";
 import {
   AlertDialog,
@@ -30,6 +30,14 @@ import type { Device, DeviceStatus, StatusHistory } from "@prisma/client";
 
 type DeviceWithStatus = Device & { currentStatus: DeviceStatus | null };
 
+const HOUR_OPTIONS = [
+  { label: "1h",  value: 1   },
+  { label: "6h",  value: 6   },
+  { label: "24h", value: 24  },
+  { label: "7d",  value: 168 },
+] as const;
+type HourOption = typeof HOUR_OPTIONS[number]["value"];
+
 export default function DeviceDetailPage({
   params,
 }: {
@@ -40,19 +48,24 @@ export default function DeviceDetailPage({
   const [device, setDevice] = useState<DeviceWithStatus | null>(null);
   const [history, setHistory] = useState<StatusHistory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hours, setHours] = useState<HourOption>(24);
 
-  async function load() {
+  const load = useCallback(async (h: number) => {
     const [devRes, histRes] = await Promise.all([
       fetch(`/api/devices/${id}`),
-      fetch(`/api/status/${id}?hours=24`),
+      fetch(`/api/status/${id}?hours=${h}`),
     ]);
     if (devRes.ok) setDevice(await devRes.json());
     if (histRes.ok) setHistory(await histRes.json());
     setLoading(false);
-  }
+  }, [id]);
 
   useEffect(() => {
-    load();
+    setLoading(true);
+    load(hours);
+  }, [hours, load]);
+
+  useEffect(() => {
     const interval = setInterval(async () => {
       const r = await fetch(`/api/devices/${id}`);
       if (r.ok) setDevice(await r.json());
@@ -70,7 +83,7 @@ export default function DeviceDetailPage({
     }
   }
 
-  if (loading) {
+  if (loading && !device) {
     return (
       <>
         <Topbar title="Carregando..." back="/devices" />
@@ -88,7 +101,7 @@ export default function DeviceDetailPage({
   if (!device) return <div className="p-7"><p className="text-muted-foreground">Dispositivo não encontrado.</p></div>;
 
   const status = device.currentStatus;
-  const hasMikrotikMetrics = status?.uptime != null || status?.cpuLoad != null;
+  const hasSystemMetrics = device.snmpEnabled || device.routerosEnabled;
 
   return (
     <>
@@ -126,135 +139,177 @@ export default function DeviceDetailPage({
         </AlertDialog>
       </Topbar>
 
-    <div className="p-7 space-y-6">
-      {/* Metrics cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <MetricCard
-          icon={Wifi}
-          label="Ping"
-          value={formatResponseTime(status?.pingMs)}
-          color="text-[var(--chart-1)]"
-        />
-        {status?.uptime != null && (
+      <div className="p-7 space-y-6">
+        {/* Metrics cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <MetricCard
-            icon={Clock}
-            label="Uptime"
-            value={formatUptime(status.uptime)}
-            color="text-success"
+            icon={Wifi}
+            label="Ping"
+            value={formatResponseTime(status?.pingMs)}
+            color="text-[var(--chart-1)]"
           />
-        )}
-        {status?.cpuLoad != null && (
-          <MetricCard
-            icon={Cpu}
-            label="CPU"
-            value={formatPercent(status.cpuLoad)}
-            color="text-warning"
-          />
-        )}
-        {status?.memoryUsed != null && (
-          <MetricCard
-            icon={MemoryStick}
-            label="Memória"
-            value={formatPercent(status.memoryUsed)}
-            color="text-[var(--chart-4)]"
-          />
-        )}
-        {status?.httpOk != null && (
-          <MetricCard
-            icon={Globe}
-            label="HTTP"
-            value={status.httpOk ? "OK" : "Falha"}
-            color={status.httpOk ? "text-success" : "text-destructive"}
-          />
-        )}
-      </div>
+          {status?.uptime != null && (
+            <MetricCard
+              icon={Clock}
+              label="Uptime"
+              value={formatUptime(status.uptime)}
+              color="text-success"
+            />
+          )}
+          {status?.cpuLoad != null && (
+            <MetricCard
+              icon={Cpu}
+              label="CPU"
+              value={formatPercent(status.cpuLoad)}
+              color="text-warning"
+            />
+          )}
+          {status?.memoryUsed != null && (
+            <MetricCard
+              icon={MemoryStick}
+              label="Memória"
+              value={formatPercent(status.memoryUsed)}
+              color="text-[var(--chart-4)]"
+            />
+          )}
+          {status?.httpOk != null && (
+            <MetricCard
+              icon={Globe}
+              label="HTTP"
+              value={status.httpOk ? "OK" : "Falha"}
+              color={status.httpOk ? "text-success" : "text-destructive"}
+            />
+          )}
+        </div>
 
-      {/* Protocols enabled */}
-      <div className="flex flex-wrap gap-2">
-        {device.pingEnabled && <Badge variant="outline">Ping</Badge>}
-        {device.httpEnabled && <Badge variant="outline">HTTP :{device.httpPort ?? 80}</Badge>}
-        {device.snmpEnabled && <Badge variant="outline">SNMP</Badge>}
-        {device.routerosEnabled && <Badge variant="outline">RouterOS API</Badge>}
-      </div>
+        {/* Protocols enabled */}
+        <div className="flex flex-wrap gap-2">
+          {device.pingEnabled && <Badge variant="outline">Ping</Badge>}
+          {device.httpEnabled && <Badge variant="outline">HTTP :{device.httpPort ?? 80}</Badge>}
+          {device.snmpEnabled && <Badge variant="outline">SNMP</Badge>}
+          {device.routerosEnabled && <Badge variant="outline">RouterOS API</Badge>}
+        </div>
 
-      <Separator />
+        <Separator />
 
-      {/* Charts */}
-      {history.length > 0 && (
+        {/* Charts */}
         <div className="space-y-4">
-          <h2 className="font-semibold flex items-center gap-2">
-            <Activity className="h-4 w-4" />
-            Métricas (últimas 24h)
-          </h2>
-          <div className={`grid gap-4 ${hasMikrotikMetrics ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 max-w-xl"}`}>
-            <Card>
-              <CardContent className="pt-4">
-                <MetricsChart history={history} metric="pingMs" label="Latência (ms)" color="var(--chart-1)" unit="ms" />
-              </CardContent>
-            </Card>
-            {hasMikrotikMetrics && (
-              <>
-                <Card>
-                  <CardContent className="pt-4">
-                    <MetricsChart history={history} metric="cpuLoad" label="CPU (%)" color="var(--chart-3)" unit="%" />
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-4">
+          {/* Section header + period selector */}
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-semibold flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              Métricas
+            </h2>
+            <div className="flex items-center gap-0.5">
+              {HOUR_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setHours(opt.value)}
+                  className={`px-2.5 h-6 rounded text-[11px] font-semibold transition-colors ${
+                    hours === opt.value
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Latency chart (multi-color with axes) */}
+          <Card>
+            <CardContent className="pt-4">
+              {loading ? (
+                <Skeleton className="h-44 w-full" />
+              ) : history.length >= 2 ? (
+                <PingChart history={history} />
+              ) : (
+                <div className="h-44 flex items-center justify-center">
+                  <p className="text-xs text-muted-foreground">Sem dados para o período</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* CPU + Memory charts — only when device has SNMP/RouterOS */}
+          {hasSystemMetrics && history.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card>
+                <CardContent className="pt-4">
+                  {loading ? (
+                    <Skeleton className="h-44 w-full" />
+                  ) : (
+                    <MetricsChart history={history} metric="cpuLoad" label="CPU (%)" color="var(--warning)" unit="%" />
+                  )}
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-4">
+                  {loading ? (
+                    <Skeleton className="h-44 w-full" />
+                  ) : (
                     <MetricsChart history={history} metric="memoryUsed" label="Memória (%)" color="var(--chart-4)" unit="%" />
-                  </CardContent>
-                </Card>
-              </>
-            )}
-          </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
-      )}
 
-      {/* History table */}
-      {history.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="font-semibold">Histórico recente</h2>
-          <div className="rounded-lg border bg-card overflow-hidden">
-            <table className="w-full text-xs">
-              <thead className="bg-muted/40 border-b">
-                <tr>
-                  <th className="text-left px-4 py-2.5 font-medium">Data/Hora</th>
-                  <th className="text-left px-4 py-2.5 font-medium">Status</th>
-                  <th className="text-left px-4 py-2.5 font-medium">Ping</th>
-                  <th className="text-left px-4 py-2.5 font-medium">CPU</th>
-                  <th className="text-left px-4 py-2.5 font-medium">Memória</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {[...history].reverse().slice(0, 50).map((h) => (
-                  <tr key={h.id} className="hover:bg-muted/10">
-                    <td className="px-4 py-2 font-mono text-muted-foreground">
-                      {new Date(h.timestamp).toLocaleString("pt-BR")}
-                    </td>
-                    <td className="px-4 py-2">
-                      <StatusBadge isOnline={h.isOnline} />
-                    </td>
-                    <td className="px-4 py-2 font-mono">{formatResponseTime(h.pingMs)}</td>
-                    <td className="px-4 py-2 font-mono">{formatPercent(h.cpuLoad)}</td>
-                    <td className="px-4 py-2 font-mono">{formatPercent(h.memoryUsed)}</td>
+        {/* History table */}
+        {history.length > 0 && (
+          <div className="space-y-3">
+            <h2 className="font-semibold">Histórico recente</h2>
+            <div className="rounded-lg border bg-card overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/40 border-b">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 font-medium">Data/Hora</th>
+                    <th className="text-left px-4 py-2.5 font-medium">Status</th>
+                    <th className="text-left px-4 py-2.5 font-medium">Ping</th>
+                    {hasSystemMetrics && (
+                      <>
+                        <th className="text-left px-4 py-2.5 font-medium">CPU</th>
+                        <th className="text-left px-4 py-2.5 font-medium">Memória</th>
+                      </>
+                    )}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y">
+                  {[...history].reverse().slice(0, 50).map((h) => (
+                    <tr key={h.id} className="hover:bg-muted/10">
+                      <td className="px-4 py-2 font-mono text-muted-foreground">
+                        {new Date(h.timestamp).toLocaleString("pt-BR")}
+                      </td>
+                      <td className="px-4 py-2">
+                        <StatusBadge isOnline={h.isOnline} />
+                      </td>
+                      <td className="px-4 py-2 font-mono">{formatResponseTime(h.pingMs)}</td>
+                      {hasSystemMetrics && (
+                        <>
+                          <td className="px-4 py-2 font-mono">{formatPercent(h.cpuLoad)}</td>
+                          <td className="px-4 py-2 font-mono">{formatPercent(h.memoryUsed)}</td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {device.notes && (
-        <>
-          <Separator />
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Observações</p>
-            <p className="text-sm whitespace-pre-wrap">{device.notes}</p>
-          </div>
-        </>
-      )}
-    </div>
+        {device.notes && (
+          <>
+            <Separator />
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1">Observações</p>
+              <p className="text-sm whitespace-pre-wrap">{device.notes}</p>
+            </div>
+          </>
+        )}
+      </div>
     </>
   );
 }
@@ -272,13 +327,11 @@ function MetricCard({
 }) {
   return (
     <Card>
-      <CardHeader className="pb-1 pt-4">
-        <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+      <CardContent className="pt-4 pb-4">
+        <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">
           <Icon className={`h-3.5 w-3.5 ${color}`} />
           {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pb-4">
+        </p>
         <p className="text-2xl font-bold font-mono">{value}</p>
       </CardContent>
     </Card>
