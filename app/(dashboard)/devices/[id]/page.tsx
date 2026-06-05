@@ -156,19 +156,19 @@ export default function DeviceDetailPage({
               color="text-success"
             />
           )}
-          {status?.cpuLoad != null && (
+          {hasSystemMetrics && (
             <MetricCard
               icon={Cpu}
               label="CPU"
-              value={formatPercent(status.cpuLoad)}
+              value={status?.cpuLoad != null ? `${status.cpuLoad.toFixed(0)}%` : "—"}
               color="text-warning"
             />
           )}
-          {status?.memoryUsed != null && (
+          {hasSystemMetrics && (
             <MetricCard
               icon={MemoryStick}
               label="Memória"
-              value={formatPercent(status.memoryUsed)}
+              value={status?.memoryUsed != null ? `${status.memoryUsed.toFixed(0)}%` : "—"}
               color="text-[var(--chart-4)]"
             />
           )}

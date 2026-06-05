@@ -52,7 +52,7 @@ model DeviceStatus {
   isOnline   Boolean  @default(false)
   pingMs     Int?
   httpOk     Boolean?
-  uptime     BigInt?
+  uptime     Int?
   cpuLoad    Float?
   memoryUsed Float?
 

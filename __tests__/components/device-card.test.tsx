@@ -126,7 +126,7 @@ describe("DeviceCard", () => {
             isOnline: true,
             pingMs: null,
             httpOk: null,
-            uptime: BigInt(3600),
+            uptime: 3600,
             cpuLoad: null,
             memoryUsed: null,
             checkedAt: new Date(),

@@ -24,8 +24,8 @@ describe("formatUptime", () => {
     expect(formatUptime(172800)).toBe("2d 0h 0m");
   });
 
-  it("accepts BigInt values", () => {
-    expect(formatUptime(BigInt(3600))).toBe("1h 0m");
+  it("accepts integer values", () => {
+    expect(formatUptime(3600)).toBe("1h 0m");
   });
 });
 
