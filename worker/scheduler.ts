@@ -24,7 +24,14 @@ async function runChecks(device: Device) {
   const pingResult = results[0].status === "fulfilled" ? results[0].value : null;
   const httpResult = results[1].status === "fulfilled" ? results[1].value : null;
   const snmpResult = results[2].status === "fulfilled" ? results[2].value : null;
-  const rosResult = results[3].status === "fulfilled" ? results[3].value : null;
+  const rosResult  = results[3].status === "fulfilled" ? results[3].value : null;
+
+  if (results[2].status === "rejected" && device.snmpEnabled) {
+    console.error(`[SNMP] ${device.name} (${device.ip}):`, results[2].reason?.message ?? results[2].reason);
+  }
+  if (results[3].status === "rejected" && device.routerosEnabled) {
+    console.error(`[RouterOS] ${device.name} (${device.ip}):`, results[3].reason?.message ?? results[3].reason);
+  }
 
   const isOnline = pingResult?.alive ?? httpResult?.ok ?? false;
   const pingMs = pingResult?.alive ? pingResult.responseMs : null;

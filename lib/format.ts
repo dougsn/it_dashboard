@@ -1,4 +1,4 @@
-export function formatUptime(seconds: number | bigint | null | undefined): string {
+export function formatUptime(seconds: number | null | undefined): string {
   if (seconds == null) return "—";
   const s = Number(seconds);
   const d = Math.floor(s / 86400);
