@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/status-badge";
-import { Copy, Check, Activity, Clock, AlertTriangle } from "lucide-react";
+import { Copy, Check, Activity, Clock, AlertTriangle, ArrowDown, ArrowUp, MapPin } from "lucide-react";
 import { Topbar } from "@/components/topbar";
 import {
   ResponsiveContainer,
@@ -32,9 +32,14 @@ interface LinkData {
   id: string;
   name: string;
   description: string | null;
+  location: string | null;
   isOnline: boolean;
   lastEventAt: string | null;
   createdAt: string;
+  downloadBps: number | null;
+  uploadBps: number | null;
+  latencyMs: number | null;
+  mikrotikInterface: string | null;
 }
 
 interface EventsResponse {
@@ -115,6 +120,14 @@ function formatDuration(ms: number) {
   const h = Math.floor(ms / 3_600_000);
   const m = Math.floor((ms % 3_600_000) / 60_000);
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function formatBps(bps: number | null): string {
+  if (bps == null) return "—";
+  if (bps >= 1_000_000_000) return `${(bps / 1_000_000_000).toFixed(2)} Gbps`;
+  if (bps >= 1_000_000)     return `${(bps / 1_000_000).toFixed(2)} Mbps`;
+  if (bps >= 1_000)         return `${(bps / 1_000).toFixed(0)} Kbps`;
+  return `${bps} bps`;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -247,6 +260,69 @@ export default function LinkDetailPage({ params }: { params: Promise<{ id: strin
           </CardContent>
         </Card>
       </div>
+
+      {/* Traffic card */}
+      <Card>
+        <CardHeader className="pb-2 pt-4">
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Activity className="h-3.5 w-3.5 text-primary" />
+              Tráfego atual
+            </span>
+            {link.mikrotikInterface && (
+              <span className="text-[11px] font-mono bg-muted px-2 py-0.5 rounded">{link.mikrotikInterface}</span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pb-4">
+          {link.downloadBps == null && link.uploadBps == null ? (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/40 border border-border/60">
+              <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold">Monitoramento de tráfego não configurado</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Associe um Mikrotik e uma interface a este link para habilitar coleta de Download/Upload via RouterOS.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-success/5 p-4">
+                <div className="w-9 h-9 rounded-lg bg-success/15 flex items-center justify-center shrink-0">
+                  <ArrowDown className="h-4 w-4 text-success" />
+                </div>
+                <div>
+                  <p className="text-[9.5px] font-bold uppercase tracking-widest text-muted-foreground">Download</p>
+                  <p className="text-xl font-extrabold font-mono tabular-nums text-success leading-tight mt-0.5">
+                    {formatBps(link.downloadBps)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-primary/5 p-4">
+                <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                  <ArrowUp className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-[9.5px] font-bold uppercase tracking-widest text-muted-foreground">Upload</p>
+                  <p className="text-xl font-extrabold font-mono tabular-nums text-primary leading-tight mt-0.5">
+                    {formatBps(link.uploadBps)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          {(link.location || link.latencyMs != null) && (
+            <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+              {link.location && (
+                <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{link.location}</span>
+              )}
+              {link.latencyMs != null && (
+                <span className="font-mono">Latência: <span className="font-semibold text-foreground">{link.latencyMs}ms</span></span>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Chart */}
       <Card>

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Wifi, MapPin, History, Zap, X, AlertTriangle } from "lucide-react";
+import { Wifi, MapPin, History, Zap, X, AlertTriangle, ArrowDown, ArrowUp } from "lucide-react";
 
 type SegState = "online" | "offline" | "degraded" | "empty";
 
@@ -18,7 +18,18 @@ interface LinkEvent {
 }
 interface LinkData {
   id: string; name: string; description: string | null;
-  isOnline: boolean; lastEventAt: string | null; createdAt: string;
+  location: string | null; isOnline: boolean;
+  lastEventAt: string | null; createdAt: string;
+  downloadBps: number | null; uploadBps: number | null; latencyMs: number | null;
+  mikrotikInterface: string | null;
+}
+
+function formatBps(bps: number | null): string {
+  if (bps == null) return "—";
+  if (bps >= 1_000_000_000) return `${(bps / 1_000_000_000).toFixed(2)} Gbps`;
+  if (bps >= 1_000_000)     return `${(bps / 1_000_000).toFixed(2)} Mbps`;
+  if (bps >= 1_000)         return `${(bps / 1_000).toFixed(0)} Kbps`;
+  return `${bps} bps`;
 }
 interface EventsResponse {
   link: LinkData; events: LinkEvent[]; lastBefore: LinkEvent | null; since: string;
@@ -212,17 +223,57 @@ export function LinkDetailDrawer({ linkId, onClose }: Props) {
             <MetricTile label="Tempo offline" value={loading ? null : (downMs > 0 ? formatDuration(downMs) : "0")} loading={loading} />
           </div>
 
-          {/* Bandwidth note */}
-          {!loading && (
-            <div className="flex items-start gap-2 p-3 rounded-xl bg-muted/40 border border-border/60">
-              <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-semibold text-foreground">Dados de banda não disponíveis</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Monitoramento via webhook. Para leituras de Download/Upload/Latência é necessário habilitar o monitoramento RouterOS no Mikrotik associado.
+          {/* Traffic */}
+          {!loading && link && (
+            link.downloadBps != null || link.uploadBps != null ? (
+              <div className="space-y-2">
+                <p className="text-[9.5px] font-bold uppercase tracking-widest text-muted-foreground flex items-center justify-between">
+                  <span>Tráfego atual</span>
+                  {link.mikrotikInterface && (
+                    <span className="font-mono normal-case bg-muted px-1.5 py-0.5 rounded text-[10px]">{link.mikrotikInterface}</span>
+                  )}
                 </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-success/5 p-3">
+                    <div className="w-7 h-7 rounded-lg bg-success/15 flex items-center justify-center shrink-0">
+                      <ArrowDown className="h-3.5 w-3.5 text-success" />
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Download</p>
+                      <p className="text-[1.1rem] font-extrabold font-mono tabular-nums text-success leading-tight">
+                        {formatBps(link.downloadBps)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-primary/5 p-3">
+                    <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                      <ArrowUp className="h-3.5 w-3.5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Upload</p>
+                      <p className="text-[1.1rem] font-extrabold font-mono tabular-nums text-primary leading-tight">
+                        {formatBps(link.uploadBps)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {link.latencyMs != null && (
+                  <p className="text-[11px] text-muted-foreground font-mono px-0.5">
+                    Latência: <span className="font-semibold text-foreground">{link.latencyMs}ms</span>
+                  </p>
+                )}
               </div>
-            </div>
+            ) : (
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-muted/40 border border-border/60">
+                <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-semibold text-foreground">Tráfego não monitorado</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Associe um Mikrotik e uma interface a este link para habilitar Download/Upload via RouterOS.
+                  </p>
+                </div>
+              </div>
+            )
           )}
 
           {/* Availability bar 24h */}
