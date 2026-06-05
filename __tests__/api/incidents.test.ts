@@ -49,23 +49,25 @@ describe("GET /api/incidents", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns empty array when no devices exist", async () => {
+  it("returns paginated envelope with empty data when no devices exist", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
     (mockDb.device.findMany as jest.Mock).mockResolvedValue([]);
 
     const res = await GET(makeReq());
     expect(res.status).toBe(200);
-    const data = await res.json();
-    expect(data).toHaveLength(0);
+    const body = await res.json();
+    expect(body.data).toHaveLength(0);
+    expect(body.total).toBe(0);
+    expect(body.hasMore).toBe(false);
   });
 
-  it("returns empty array when device has no history in window", async () => {
+  it("returns empty data array when device has no history in window", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
     (mockDb.device.findMany as jest.Mock).mockResolvedValue([makeDevice([])]);
 
     const res = await GET(makeReq());
-    const data = await res.json();
-    expect(data).toHaveLength(0);
+    const body = await res.json();
+    expect(body.data).toHaveLength(0);
   });
 
   it("detects a resolved incident from online→offline→online transitions", async () => {
@@ -84,7 +86,7 @@ describe("GET /api/incidents", () => {
     ]);
 
     const res = await GET(makeReq());
-    const data = await res.json();
+    const { data } = await res.json();
 
     expect(data).toHaveLength(1);
     expect(data[0].resolved).toBe(true);
@@ -107,7 +109,7 @@ describe("GET /api/incidents", () => {
     ]);
 
     const res = await GET(makeReq());
-    const data = await res.json();
+    const { data } = await res.json();
 
     expect(data).toHaveLength(1);
     expect(data[0].resolved).toBe(false);
@@ -129,7 +131,7 @@ describe("GET /api/incidents", () => {
     ]);
 
     const res = await GET(makeReq());
-    const data = await res.json();
+    const { data } = await res.json();
 
     expect(data).toHaveLength(1);
     expect(data[0].resolved).toBe(true);
@@ -173,12 +175,49 @@ describe("GET /api/incidents", () => {
     ]);
 
     const res = await GET(makeReq());
-    const data = await res.json();
+    const { data } = await res.json();
 
     expect(data).toHaveLength(2);
     // Most recent first
     expect(new Date(data[0].startAt).getTime()).toBeGreaterThan(
       new Date(data[1].startAt).getTime()
     );
+  });
+
+  it("paginates results with page and limit params", async () => {
+    mockAuth.mockResolvedValue(FAKE_SESSION as never);
+
+    // Build 30 offline→online transitions → 30 incidents (spaced 10 min apart)
+    const history: { isOnline: boolean; timestamp: Date }[] = [];
+    const origin = new Date("2024-01-01T00:00:00Z").getTime();
+    for (let i = 0; i < 30; i++) {
+      const base = origin + i * 10 * 60_000;
+      history.push({ isOnline: true,  timestamp: new Date(base) });
+      history.push({ isOnline: false, timestamp: new Date(base + 60_000) });
+      history.push({ isOnline: true,  timestamp: new Date(base + 120_000) });
+    }
+    (mockDb.device.findMany as jest.Mock).mockResolvedValue([makeDevice(history)]);
+
+    const res1 = await GET(makeReq("?page=1&limit=10"));
+    const body1 = await res1.json();
+    expect(body1.data).toHaveLength(10);
+    expect(body1.total).toBe(30);
+    expect(body1.hasMore).toBe(true);
+    expect(body1.page).toBe(1);
+
+    (mockDb.device.findMany as jest.Mock).mockResolvedValue([makeDevice(history)]);
+    const res2 = await GET(makeReq("?page=3&limit=10"));
+    const body2 = await res2.json();
+    expect(body2.data).toHaveLength(10);
+    expect(body2.hasMore).toBe(false);
+  });
+
+  it("respects limit cap of 100", async () => {
+    mockAuth.mockResolvedValue(FAKE_SESSION as never);
+    (mockDb.device.findMany as jest.Mock).mockResolvedValue([]);
+
+    const res = await GET(makeReq("?limit=9999"));
+    const body = await res.json();
+    expect(body.limit).toBeLessThanOrEqual(100);
   });
 });

@@ -14,12 +14,22 @@ export interface Incident {
   resolved: boolean;
 }
 
+export interface PaginatedIncidentsResponse {
+  data: Incident[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
 export async function GET(req: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const hours = Math.min(parseInt(searchParams.get("hours") ?? "168"), 720);
+  const page  = Math.max(1, parseInt(searchParams.get("page")  ?? "1"));
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "25")));
   const since = new Date(Date.now() - hours * 3_600_000);
 
   const devices = await db.device.findMany({
@@ -90,5 +100,14 @@ export async function GET(req: Request) {
     (a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime()
   );
 
-  return NextResponse.json(incidents);
+  const total = incidents.length;
+  const start = (page - 1) * limit;
+
+  return NextResponse.json({
+    data: incidents.slice(start, start + limit),
+    total,
+    page,
+    limit,
+    hasMore: start + limit < total,
+  } satisfies PaginatedIncidentsResponse);
 }
