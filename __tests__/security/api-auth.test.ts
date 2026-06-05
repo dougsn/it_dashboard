@@ -30,7 +30,7 @@ const FAKE_PARAMS_STATUS = Promise.resolve({ deviceId: "device-1" });
 
 describe("Route authentication enforcement", () => {
   it("GET /api/devices → 401 without session", async () => {
-    const res = await devicesGET();
+    const res = await devicesGET(new NextRequest("http://localhost/api/devices"));
     expect(res.status).toBe(401);
   });
 

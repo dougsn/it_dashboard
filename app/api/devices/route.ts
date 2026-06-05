@@ -23,11 +23,15 @@ const deviceSchema = z.object({
   checkInterval: z.number().default(60),
 });
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const { searchParams } = new URL(req.url);
+  const type = searchParams.get("type");
+
   const devices = await db.device.findMany({
+    where: type ? { type: type as "MIKROTIK" | "DVR" | "CAMERA" | "OTHER" } : undefined,
     include: { currentStatus: true },
     orderBy: { name: "asc" },
   });

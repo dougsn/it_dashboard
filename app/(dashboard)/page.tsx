@@ -27,8 +27,12 @@ interface LinkItem {
   id: string;
   name: string;
   description: string | null;
+  location: string | null;
   isOnline: boolean;
   lastEventAt: string | null;
+  downloadBps: number | null;
+  uploadBps: number | null;
+  latencyMs: number | null;
   _count: { events: number };
 }
 
@@ -152,11 +156,19 @@ function UptimeGauge({ pct, loading }: { pct: number; loading?: boolean }) {
 
 // ─── Problem row ─────────────────────────────────────────────────────────────
 
-function ProblemRow({ device, offlineAt, onClick }: { device: DeviceWithStatus; offlineAt?: string; onClick: () => void }) {
+function ProblemRow({ device, offlineAt, sparkline, onClick }: {
+  device: DeviceWithStatus; offlineAt?: string;
+  sparkline?: (number | null)[]; onClick: () => void;
+}) {
   const status = device.currentStatus;
   const isOnline = status?.isOnline ?? false;
   const isInstavel = isOnline && (status?.pingMs ?? 0) > 150;
   const TypeIcon = TYPE_ICON[device.type];
+
+  const lossPct = sparkline && sparkline.length > 0
+    ? (sparkline.filter((v) => v === null).length / sparkline.length) * 100
+    : null;
+
   return (
     <div onClick={onClick}
       className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer group border-b border-border/50 last:border-0">
@@ -170,6 +182,19 @@ function ProblemRow({ device, offlineAt, onClick }: { device: DeviceWithStatus; 
           {device.location && (<><span className="opacity-40">·</span><MapPin className="h-2.5 w-2.5" /><span>{device.location}</span></>)}
         </div>
       </div>
+      {/* Sparkline */}
+      {sparkline && sparkline.filter((v) => v !== null).length >= 3 && (
+        <div className="hidden sm:block shrink-0">
+          <PingSparkline data={sparkline} uid={`prob-${device.id}`} width={60} height={28} />
+        </div>
+      )}
+      {/* Loss */}
+      {lossPct !== null && lossPct > 0 && (
+        <div className="hidden md:flex flex-col items-end shrink-0">
+          <span className="text-[11px] font-mono font-semibold text-destructive/80">{lossPct.toFixed(0)}%</span>
+          <span className="text-[9px] text-muted-foreground uppercase tracking-wide">perda</span>
+        </div>
+      )}
       <div className="shrink-0 flex items-center gap-2">
         {isInstavel ? (
           <><span className="text-[11px] font-semibold text-warning">{status?.pingMs}ms</span>
@@ -202,58 +227,14 @@ function UptimeSegments({ segments }: { segments: SegmentState[] }) {
   );
 }
 
-// ─── Link overview card ───────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function LinkOverviewCard({ link, segments, onClick }: { link: LinkItem; segments?: SegmentState[]; onClick: () => void }) {
-  const withData = segments?.filter((s) => s !== "empty") ?? [];
-  const uptimePct = withData.length > 0
-    ? (withData.filter((s) => s === "online" || s === "degraded").length / withData.length) * 100
-    : null;
-
-  const segs = segments ?? Array(24).fill("empty" as SegmentState);
-
-  return (
-    <div onClick={onClick} className="cursor-pointer">
-      <Card className="bg-card border shadow-none hover:shadow-md transition-all hover:-translate-y-0.5 h-full">
-        <CardContent className="p-4 space-y-3">
-          {/* Header */}
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-start gap-2.5">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                link.isOnline ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-              }`}>
-                <Wifi className="h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-semibold text-sm truncate">{link.name}</p>
-                {link.description && (
-                  <p className="text-[11px] text-muted-foreground truncate">{link.description}</p>
-                )}
-              </div>
-            </div>
-            <div className="shrink-0">
-              <StatusBadge isOnline={link.isOnline} />
-            </div>
-          </div>
-
-          {/* Offline/degraded message */}
-          {!link.isOnline && uptimePct !== null && (
-            <p className="text-[11px] text-destructive flex items-center gap-1 font-medium">
-              <AlertTriangle className="h-3 w-3 shrink-0" />
-              Sem conexão · uptime {uptimePct.toFixed(1)}%
-            </p>
-          )}
-
-          {/* Uptime segments */}
-          {segments ? (
-            <UptimeSegments segments={segs} />
-          ) : (
-            <Skeleton className="h-4.5 w-full rounded" />
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+function formatBps(bps: number | null): string {
+  if (bps == null) return "—";
+  if (bps >= 1_000_000_000) return `${(bps / 1_000_000_000).toFixed(1)} Gbps`;
+  if (bps >= 1_000_000)     return `${(bps / 1_000_000).toFixed(1)} Mbps`;
+  if (bps >= 1_000)         return `${(bps / 1_000).toFixed(0)} Kbps`;
+  return `${bps} bps`;
 }
 
 // ─── Device overview card ─────────────────────────────────────────────────────
@@ -508,7 +489,9 @@ export default function OverviewPage() {
               ) : (
                 <div className="max-h-66 overflow-y-auto">
                   {problemDevices.slice(0, 8).map((d) => (
-                    <ProblemRow key={d.id} device={d} offlineAt={openIncidentByDevice[d.id]} onClick={() => setDrawerDeviceId(d.id)} />
+                    <ProblemRow key={d.id} device={d} offlineAt={openIncidentByDevice[d.id]}
+                      sparkline={overviewData?.sparklines[d.id]}
+                      onClick={() => setDrawerDeviceId(d.id)} />
                   ))}
                 </div>
               )}
@@ -530,23 +513,78 @@ export default function OverviewPage() {
                 )}
               </h2>
               <Link href="/links" className="text-xs text-primary hover:text-primary/80 font-semibold transition-colors">
-                Detalhes →
+                Gerenciar →
               </Link>
             </div>
             {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-27 rounded-xl" />)}
-              </div>
+              <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {links.map((link) => (
-                  <LinkOverviewCard
-                    key={link.id}
-                    link={link}
-                    segments={overviewData?.linkSegments[link.id]}
-                    onClick={() => setDrawerLinkId(link.id)}
-                  />
-                ))}
+              <div className="rounded-xl border bg-card overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="border-b bg-muted/40">
+                    <tr>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Link</th>
+                      <th className="hidden md:table-cell text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Local</th>
+                      <th className="hidden sm:table-cell text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">↓ Download</th>
+                      <th className="hidden sm:table-cell text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">↑ Upload</th>
+                      <th className="hidden lg:table-cell text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Estabilidade 24h</th>
+                      <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {links.map((link) => {
+                      const segs = overviewData?.linkSegments[link.id];
+                      const withData = segs?.filter((s) => s !== "empty") ?? [];
+                      const uptimePct = withData.length > 0
+                        ? (withData.filter((s) => s === "online" || s === "degraded").length / withData.length) * 100
+                        : null;
+                      return (
+                        <tr key={link.id} onClick={() => setDrawerLinkId(link.id)}
+                          className="hover:bg-muted/30 transition-colors cursor-pointer group">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                                link.isOnline ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                              }`}>
+                                <Wifi className="h-3.5 w-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium truncate group-hover:text-primary transition-colors">{link.name}</p>
+                                {link.description && (
+                                  <p className="text-[11px] text-muted-foreground truncate">{link.description}</p>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="hidden md:table-cell px-4 py-3 text-xs text-muted-foreground">
+                            {link.location ? (
+                              <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{link.location}</span>
+                            ) : <span className="opacity-40">—</span>}
+                          </td>
+                          <td className="hidden sm:table-cell px-4 py-3 text-right font-mono text-xs font-semibold text-success">
+                            {link.downloadBps != null ? formatBps(link.downloadBps) : <span className="text-muted-foreground/50 font-normal">sem dados</span>}
+                          </td>
+                          <td className="hidden sm:table-cell px-4 py-3 text-right font-mono text-xs font-semibold text-primary">
+                            {link.uploadBps != null ? formatBps(link.uploadBps) : <span className="text-muted-foreground/50 font-normal">—</span>}
+                          </td>
+                          <td className="hidden lg:table-cell px-4 py-3 min-w-44">
+                            {segs ? (
+                              <div className="space-y-1">
+                                <UptimeSegments segments={segs} />
+                                {uptimePct !== null && (
+                                  <p className="text-[10px] text-muted-foreground font-mono">{uptimePct.toFixed(1)}% disponível</p>
+                                )}
+                              </div>
+                            ) : <Skeleton className="h-4.5 w-full rounded" />}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <StatusBadge isOnline={link.isOnline} />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>

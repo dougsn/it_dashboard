@@ -57,7 +57,7 @@ describe("GET /api/devices", () => {
   it("returns 401 when not authenticated", async () => {
     mockAuth.mockResolvedValue(null as never);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/devices"));
     expect(res.status).toBe(401);
     const data = await res.json();
     expect(data.error).toBe("Unauthorized");
@@ -67,7 +67,7 @@ describe("GET /api/devices", () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
     (mockDb.device.findMany as jest.Mock).mockResolvedValue([FAKE_DEVICE]);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/devices"));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data).toHaveLength(1);
@@ -80,7 +80,7 @@ describe("GET /api/devices", () => {
       { ...FAKE_DEVICE, currentStatus: { isOnline: true, pingMs: 5 } },
     ]);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/devices"));
     const data = await res.json();
     expect(data[0].currentStatus.isOnline).toBe(true);
   });

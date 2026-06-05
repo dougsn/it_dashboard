@@ -6,6 +6,9 @@ import { auth } from "@/lib/auth";
 const updateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional().nullable(),
+  location: z.string().max(100).optional().nullable(),
+  mikrotikDeviceId: z.string().optional().nullable(),
+  mikrotikInterface: z.string().max(50).optional().nullable(),
 });
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
