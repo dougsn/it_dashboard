@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { DeviceDetailDrawer } from "@/components/device-detail-drawer";
 import { buttonVariants } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PingSparkline } from "@/components/ping-sparkline";
 import {
   Plus,
   Layers,
@@ -21,10 +22,13 @@ import {
   ChevronsUpDown,
   ChevronUp,
   ChevronDown,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { Topbar } from "@/components/topbar";
 import { formatResponseTime, formatUptime, formatPercent } from "@/lib/format";
 import type { Device, DeviceStatus, DeviceType } from "@prisma/client";
+import type { OverviewData } from "@/app/api/overview/route";
 
 type DeviceWithStatus = Device & { currentStatus: DeviceStatus | null };
 
@@ -63,6 +67,106 @@ function MiniBar({ value, colorClass }: { value: number; colorClass: string }) {
         className={`h-full rounded-full ${colorClass}`}
         style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }}
       />
+    </div>
+  );
+}
+
+// ─── Compact device card (card view) ─────────────────────────────────────────
+
+const TYPE_ICON_BG: Record<DeviceType, string> = {
+  MIKROTIK: "bg-primary/10 text-primary",
+  DVR:      "bg-warning/10 text-warning",
+  CAMERA:   "bg-destructive/10 text-destructive",
+  OTHER:    "bg-muted text-muted-foreground",
+};
+
+function DeviceCard({
+  device,
+  sparkline,
+  onClick,
+}: {
+  device: DeviceWithStatus;
+  sparkline?: (number | null)[];
+  onClick: () => void;
+}) {
+  const status = device.currentStatus;
+  const isOnline = status?.isOnline ?? false;
+  const ping = status?.pingMs;
+  const isInstavel = isOnline && (ping ?? 0) > 150;
+  const TypeIcon = TYPE_ICON[device.type];
+
+  const borderColor = isInstavel
+    ? "border-l-warning"
+    : isOnline
+    ? "border-l-success"
+    : "border-l-destructive";
+
+  const pingColor = isInstavel
+    ? "text-warning"
+    : isOnline
+    ? "text-foreground"
+    : "text-muted-foreground";
+
+  return (
+    <div
+      onClick={onClick}
+      className={`cursor-pointer rounded-xl border bg-card border-l-4 ${borderColor} hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden`}
+    >
+      <div className="p-3 space-y-2">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-1.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${TYPE_ICON_BG[device.type]}`}>
+              <TypeIcon className="h-3.5 w-3.5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate leading-tight">{device.name}</p>
+              <p className="text-[10px] font-mono text-muted-foreground">{device.ip}</p>
+            </div>
+          </div>
+          {isInstavel ? (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-warning/10 text-warning border border-warning/20 shrink-0">
+              Instável
+            </span>
+          ) : (
+            <span className={`text-[10px] font-semibold shrink-0 ${isOnline ? "text-success" : "text-destructive"}`}>
+              {isOnline ? "Online" : "Offline"}
+            </span>
+          )}
+        </div>
+
+        {/* Ping + Sparkline */}
+        <div className="flex items-end justify-between gap-1">
+          <div>
+            <div className="flex items-baseline gap-0.5">
+              <span className={`text-xl font-extrabold leading-none tabular-nums ${pingColor}`}>
+                {ping ?? "—"}
+              </span>
+              {ping != null && (
+                <span className="text-[10px] text-muted-foreground font-medium">ms</span>
+              )}
+            </div>
+            <p className="text-[7.5px] text-muted-foreground uppercase tracking-widest font-bold mt-0.5">
+              ping
+            </p>
+          </div>
+          {sparkline && sparkline.length >= 3 ? (
+            <PingSparkline data={sparkline} uid={device.id} width={90} height={32} />
+          ) : (
+            <svg width={90} height={32} aria-hidden="true">
+              <line x1="3" y1="29" x2="87" y2="29" stroke="var(--border)" strokeWidth="1.5" strokeDasharray="3 3" />
+            </svg>
+          )}
+        </div>
+
+        {/* Location */}
+        {device.location && (
+          <p className="flex items-center gap-1 text-[10px] text-muted-foreground truncate">
+            <MapPin className="h-2.5 w-2.5 shrink-0" />
+            {device.location}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -142,7 +246,9 @@ function FilterChip({ active, onClick, children, color = "default" }: FilterChip
 
 export default function DevicesPage() {
   const [devices, setDevices] = useState<DeviceWithStatus[]>([]);
+  const [overviewData, setOverviewData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"table" | "cards">("cards");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ONLINE" | "OFFLINE">("ALL");
   const [typeFilter, setTypeFilter] = useState<DeviceType | "ALL">("ALL");
   const [drawerDeviceId, setDrawerDeviceId] = useState<string | null>(null);
@@ -158,17 +264,21 @@ export default function DevicesPage() {
     }
   }
 
-  async function load() {
-    const res = await fetch("/api/devices");
-    if (res.ok) setDevices(await res.json());
+  const load = useCallback(async () => {
+    const [devRes, ovRes] = await Promise.all([
+      fetch("/api/devices"),
+      fetch("/api/overview"),
+    ]);
+    if (devRes.ok) setDevices(await devRes.json());
+    if (ovRes.ok) setOverviewData(await ovRes.json());
     setLoading(false);
-  }
+  }, []);
 
   useEffect(() => {
     load();
     const interval = setInterval(load, 30_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [load]);
 
   const filtered = devices
     .filter((d) => {
@@ -213,6 +323,32 @@ export default function DevicesPage() {
   return (
     <>
       <Topbar title="Dispositivos" icon={Server} live={!loading}>
+        {/* View toggle */}
+        <div className="flex items-center rounded-lg border border-border overflow-hidden">
+          <button
+            onClick={() => setViewMode("table")}
+            className={`flex items-center justify-center h-8 w-8 transition-colors ${
+              viewMode === "table"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted"
+            }`}
+            title="Visualização em tabela"
+          >
+            <List className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => setViewMode("cards")}
+            className={`flex items-center justify-center h-8 w-8 transition-colors ${
+              viewMode === "cards"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted"
+            }`}
+            title="Visualização em cards"
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
         <Link
           href="/devices/new/bulk"
           className={buttonVariants({ size: "sm", variant: "outline" })}
@@ -271,13 +407,21 @@ export default function DevicesPage() {
           ))}
         </div>
 
-        {/* Table */}
+        {/* Content */}
         {loading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-14 rounded-lg" />
-            ))}
-          </div>
+          viewMode === "cards" ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <Skeleton key={i} className="h-28 rounded-xl" />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 rounded-lg" />
+              ))}
+            </div>
+          )
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
             {devices.length === 0 ? (
@@ -291,6 +435,17 @@ export default function DevicesPage() {
             ) : (
               <p>Nenhum dispositivo encontrado para os filtros selecionados.</p>
             )}
+          </div>
+        ) : viewMode === "cards" ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {filtered.map((device) => (
+              <DeviceCard
+                key={device.id}
+                device={device}
+                sparkline={overviewData?.sparklines[device.id]}
+                onClick={() => setDrawerDeviceId(device.id)}
+              />
+            ))}
           </div>
         ) : (
           <div className="rounded-xl border bg-card overflow-hidden">

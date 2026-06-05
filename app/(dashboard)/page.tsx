@@ -265,7 +265,6 @@ function DeviceOverviewCard({ device, sparkline, onClick }: { device: DeviceWith
   const isInstavel = isOnline && (ping ?? 0) > 150;
   const TypeIcon = TYPE_ICON[device.type];
 
-  const sparkColor = isInstavel ? "var(--warning)" : isOnline ? "var(--success)" : "var(--destructive)";
 
   return (
     <div onClick={onClick} className="cursor-pointer">
@@ -326,7 +325,7 @@ function DeviceOverviewCard({ device, sparkline, onClick }: { device: DeviceWith
             </div>
             {sparkline && sparkline.filter(v => v !== null).length >= 3 ? (
               <div className="shrink-0">
-                <PingSparkline data={sparkline} color={sparkColor} uid={device.id} />
+                <PingSparkline data={sparkline} uid={device.id} />
               </div>
             ) : (
               <span className="text-[10px] text-muted-foreground/40 shrink-0">sem histórico</span>

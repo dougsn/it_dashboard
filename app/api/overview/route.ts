@@ -12,13 +12,13 @@ export async function GET() {
   const now = Date.now();
   const since24h = new Date(now - 24 * 3_600_000);
 
-  const since2h = new Date(now - 2 * 3_600_000);
+  const since6h = new Date(now - 6 * 3_600_000);
 
   const [pingHistory, links, linkEvents] = await Promise.all([
     db.statusHistory.findMany({
-      where: { timestamp: { gte: since2h } },
+      where: { timestamp: { gte: since6h } },
       orderBy: { timestamp: "asc" },
-      select: { deviceId: true, pingMs: true },
+      select: { deviceId: true, pingMs: true, isOnline: true },
     }),
     db.link.findMany({ select: { id: true, isOnline: true } }),
     db.linkEvent.findMany({
@@ -28,14 +28,14 @@ export async function GET() {
     }),
   ]);
 
-  // Sparklines: last 24 pings per device
+  // Sparklines: last 60 checks per device (ping = null when offline)
   const sparklines: Record<string, (number | null)[]> = {};
   for (const r of pingHistory) {
     if (!sparklines[r.deviceId]) sparklines[r.deviceId] = [];
-    sparklines[r.deviceId].push(r.pingMs ?? null);
+    sparklines[r.deviceId].push(r.isOnline ? (r.pingMs ?? null) : null);
   }
   for (const id of Object.keys(sparklines)) {
-    sparklines[id] = sparklines[id].slice(-40);
+    sparklines[id] = sparklines[id].slice(-60);
   }
 
   // Link segments: 24 hourly slots
