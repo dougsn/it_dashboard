@@ -20,6 +20,7 @@ import type { Device, DeviceStatus, DeviceType } from "@prisma/client";
 import type { HealthData } from "@/app/api/health/route";
 import type { Incident } from "@/app/api/incidents/route";
 import type { OverviewData, SegmentState } from "@/app/api/overview/route";
+import type { TimelineEvent } from "@/app/api/timeline/route";
 
 type DeviceWithStatus = Device & { currentStatus: DeviceStatus | null };
 
@@ -165,45 +166,45 @@ function ProblemRow({ device, offlineAt, sparkline, onClick }: {
   const isInstavel = isOnline && (status?.pingMs ?? 0) > 150;
   const TypeIcon = TYPE_ICON[device.type];
 
-  const lossPct = sparkline && sparkline.length > 0
-    ? (sparkline.filter((v) => v === null).length / sparkline.length) * 100
-    : null;
+  const dotColor = isInstavel ? "bg-warning" : "bg-destructive";
+  const descColor = isInstavel ? "text-warning" : "text-destructive";
+  const desc = isInstavel
+    ? `latência alta (${status?.pingMs}ms)`
+    : offlineAt
+    ? `offline ${offlineSince(offlineAt).replace("offline ", "")}`
+    : "sem resposta";
 
   return (
     <div onClick={onClick}
-      className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer group border-b border-border/50 last:border-0">
-      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${TYPE_ICON_BG[device.type]}`}>
-        <TypeIcon className="h-4 w-4" />
+      className="flex items-start gap-3 px-5 py-3.5 hover:bg-muted/20 transition-colors cursor-pointer border-b border-border/50 last:border-0">
+      <div className="mt-1.5 shrink-0">
+        <span className={`block w-2.5 h-2.5 rounded-full ${dotColor}`} />
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{device.name}</p>
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm leading-snug">
+          <span className="font-semibold">{device.name}</span>
+          {" "}
+          <span className={`font-medium ${descColor}`}>{desc}</span>
+        </p>
+        <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground">
+          <TypeIcon className="h-3 w-3 shrink-0" />
+          <span>{TYPE_LABELS[device.type]}</span>
+          {device.location && (
+            <>
+              <span className="opacity-40">·</span>
+              <MapPin className="h-2.5 w-2.5 shrink-0" />
+              <span>{device.location}</span>
+            </>
+          )}
+          <span className="opacity-40">·</span>
           <span className="font-mono">{device.ip}</span>
-          {device.location && (<><span className="opacity-40">·</span><MapPin className="h-2.5 w-2.5" /><span>{device.location}</span></>)}
         </div>
       </div>
-      {/* Sparkline */}
       {sparkline && sparkline.filter((v) => v !== null).length >= 3 && (
-        <div className="hidden sm:block shrink-0">
-          <PingSparkline data={sparkline} uid={`prob-${device.id}`} width={60} height={28} />
+        <div className="hidden sm:block shrink-0 mt-0.5">
+          <PingSparkline data={sparkline} uid={`prob-${device.id}`} width={56} height={26} />
         </div>
       )}
-      {/* Loss */}
-      {lossPct !== null && lossPct > 0 && (
-        <div className="hidden md:flex flex-col items-end shrink-0">
-          <span className="text-[11px] font-mono font-semibold text-destructive/80">{lossPct.toFixed(0)}%</span>
-          <span className="text-[9px] text-muted-foreground uppercase tracking-wide">perda</span>
-        </div>
-      )}
-      <div className="shrink-0 flex items-center gap-2">
-        {isInstavel ? (
-          <><span className="text-[11px] font-semibold text-warning">{status?.pingMs}ms</span>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-warning/10 text-warning border border-warning/20">Instável</span></>
-        ) : (
-          <>{offlineAt && <span className="text-[11px] font-semibold text-destructive/80">{offlineSince(offlineAt)}</span>}
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-destructive/10 text-destructive border border-destructive/20">Offline</span></>
-        )}
-      </div>
     </div>
   );
 }
@@ -318,6 +319,88 @@ function DeviceOverviewCard({ device, sparkline, onClick }: { device: DeviceWith
   );
 }
 
+// ─── Incident timeline row ────────────────────────────────────────────────────
+
+const KIND_DOT: Record<TimelineEvent["kind"], string> = {
+  DEVICE_OFFLINE:      "bg-destructive",
+  DEVICE_ONLINE:       "bg-success",
+  DEVICE_HIGH_LATENCY: "bg-warning",
+  LINK_DOWN:           "bg-destructive",
+  LINK_UP:             "bg-success",
+};
+
+const KIND_TEXT: Record<TimelineEvent["kind"], string> = {
+  DEVICE_OFFLINE:      "text-destructive",
+  DEVICE_ONLINE:       "text-success",
+  DEVICE_HIGH_LATENCY: "text-warning",
+  LINK_DOWN:           "text-destructive",
+  LINK_UP:             "text-success",
+};
+
+function kindLabel(ev: TimelineEvent): string {
+  switch (ev.kind) {
+    case "DEVICE_OFFLINE":      return "ficou offline";
+    case "DEVICE_ONLINE":       return "voltou a responder";
+    case "DEVICE_HIGH_LATENCY": return `latência alta (${ev.value}ms)`;
+    case "LINK_DOWN":           return "link de internet caiu";
+    case "LINK_UP":             return "reconectado";
+  }
+}
+
+const ENTITY_ICON: Record<TimelineEvent["entityType"], React.ElementType> = {
+  MIKROTIK: Router, DVR: HardDrive, CAMERA: Camera, OTHER: Box, LINK: Network,
+};
+const ENTITY_LABEL: Record<TimelineEvent["entityType"], string> = {
+  MIKROTIK: "Mikrotik", DVR: "DVR", CAMERA: "Câmera", OTHER: "Outro", LINK: "Link",
+};
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60_000);
+  if (m < 1) return "agora";
+  if (m < 60) return `há ${m}min`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return `há ${h}h${rem > 0 ? String(rem).padStart(2, "0") : ""}`;
+}
+
+function IncidentTimelineRow({ ev }: { ev: TimelineEvent }) {
+  const EIcon = ENTITY_ICON[ev.entityType];
+  const ts = new Date(ev.timestamp);
+  const hhmm = ts.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <div className="flex items-start gap-3 px-5 py-3.5 border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors">
+      <div className="mt-1.5 shrink-0">
+        <span className={`block w-2.5 h-2.5 rounded-full ${KIND_DOT[ev.kind]}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm leading-snug">
+          <span className="font-semibold">{ev.entityName}</span>
+          {" "}
+          <span className={`font-medium ${KIND_TEXT[ev.kind]}`}>{kindLabel(ev)}</span>
+        </p>
+        <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground">
+          <EIcon className="h-3 w-3 shrink-0" />
+          <span>{ENTITY_LABEL[ev.entityType]}</span>
+          {ev.location && (
+            <>
+              <span className="opacity-40">·</span>
+              <MapPin className="h-2.5 w-2.5 shrink-0" />
+              <span>{ev.location}</span>
+            </>
+          )}
+          <span className="opacity-40">·</span>
+          <span>{timeAgo(ev.timestamp)}</span>
+        </div>
+      </div>
+      <span className="shrink-0 text-xs font-mono font-semibold text-muted-foreground tabular-nums mt-0.5">
+        {hhmm}
+      </span>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function OverviewPage() {
@@ -325,6 +408,7 @@ export default function OverviewPage() {
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [health, setHealth] = useState<HealthData | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [overviewData, setOverviewData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<DeviceType | "ALL">("ALL");
@@ -334,18 +418,20 @@ export default function OverviewPage() {
   const [drawerLinkId, setDrawerLinkId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [devRes, linkRes, healthRes, incRes, ovRes] = await Promise.all([
+    const [devRes, linkRes, healthRes, incRes, ovRes, tlRes] = await Promise.all([
       fetch("/api/devices"),
       fetch("/api/links"),
       fetch("/api/health"),
       fetch("/api/incidents?hours=168"),
       fetch("/api/overview"),
+      fetch("/api/timeline?hours=24"),
     ]);
     if (devRes.ok) setDevices(await devRes.json());
     if (linkRes.ok) setLinks(await linkRes.json());
     if (healthRes.ok) setHealth(await healthRes.json());
     if (incRes.ok) setIncidents(await incRes.json());
     if (ovRes.ok) setOverviewData(await ovRes.json());
+    if (tlRes.ok) setTimeline(await tlRes.json());
     setLastUpdated(new Date());
     setLoading(false);
   }, []);
@@ -589,6 +675,47 @@ export default function OverviewPage() {
             )}
           </div>
         )}
+
+        {/* Linha do tempo de incidentes */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <Activity className="h-4 w-4 text-muted-foreground" />
+              Linha do tempo de incidentes
+            </h2>
+            <Link href="/devices" className="text-xs text-primary hover:text-primary/80 font-semibold transition-colors">
+              Ver dispositivos →
+            </Link>
+          </div>
+          <div className="rounded-xl border bg-card overflow-hidden">
+            {loading ? (
+              <div>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-start gap-3 px-5 py-3.5 border-b border-border/50 last:border-0">
+                    <Skeleton className="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-3.5 w-64" />
+                      <Skeleton className="h-2.5 w-40" />
+                    </div>
+                    <Skeleton className="h-3 w-10 shrink-0" />
+                  </div>
+                ))}
+              </div>
+            ) : timeline.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <CheckCircle2 className="h-8 w-8 text-success mb-2.5 opacity-60" />
+                <p className="text-sm font-semibold">Nenhum incidente nas últimas 24h</p>
+                <p className="text-xs text-muted-foreground mt-1">Todos os sistemas operando normalmente</p>
+              </div>
+            ) : (
+              <div className="max-h-96 overflow-y-auto">
+                {timeline.slice(0, 20).map((ev) => (
+                  <IncidentTimelineRow key={ev.id} ev={ev} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Dispositivos */}
         <div className="space-y-3">
