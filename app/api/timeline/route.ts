@@ -28,7 +28,7 @@ export async function GET(req: Request) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const hours = Math.min(parseInt(searchParams.get("hours") ?? "24"), 168);
+  const hours = Math.min(parseInt(searchParams.get("hours") ?? "") || 24, 168);
   const since = new Date(Date.now() - hours * 3_600_000);
 
   const events: TimelineEvent[] = [];

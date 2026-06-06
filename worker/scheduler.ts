@@ -93,8 +93,7 @@ export async function runChecks(device: Device) {
     }),
   ]);
 
-  const status = isOnline ? "✓" : "✗";
-  console.log(`[${now.toLocaleTimeString("pt-BR")}] ${status} ${device.name} (${device.ip}) — ping: ${pingMs ?? "—"}ms`);
+  log("info", `${isOnline ? "✓" : "✗"} ${device.name}`, { ip: device.ip, pingMs: pingMs ?? null });
 }
 
 function scheduleDevice(device: Device) {
@@ -146,9 +145,10 @@ async function runLinkChecks(link: Link & { mikrotikDevice: Device | null }) {
       },
     });
 
-    console.log(
-      `[Link] ${link.name} — ↓ ${(result.downloadBps / 1_000_000).toFixed(1)} Mbps  ↑ ${(result.uploadBps / 1_000_000).toFixed(1)} Mbps`,
-    );
+    log("info", `[Link] ${link.name}`, {
+      downloadMbps: (result.downloadBps / 1_000_000).toFixed(1),
+      uploadMbps:   (result.uploadBps   / 1_000_000).toFixed(1),
+    });
   } catch (err: unknown) {
     log("error", "[Link] tráfego falhou", {
       link: link.name, ip: dev.ip, iface: link.mikrotikInterface,
@@ -158,14 +158,14 @@ async function runLinkChecks(link: Link & { mikrotikDevice: Device | null }) {
 }
 
 export async function startScheduler() {
-  console.log("Worker iniciado. Carregando dispositivos...");
+  log("info", "Worker iniciado. Carregando dispositivos...");
 
   const devices = await db.device.findMany();
   for (const device of devices) {
     scheduleDevice(device);
     deviceSnapshots.set(device.id, device.updatedAt);
   }
-  console.log(`${devices.length} dispositivo(s) agendado(s).`);
+  log("info", `${devices.length} dispositivo(s) agendado(s).`);
 
   void trackAsync(pollLinks());
 
@@ -192,7 +192,7 @@ export async function startScheduler() {
     for (const id of timers.keys()) {
       if (!currentIds.has(id)) {
         unscheduleDevice(id);
-        console.log(`Dispositivo ${id} removido do agendador.`);
+        log("info", "Dispositivo removido do agendador.", { deviceId: id });
       }
     }
 
@@ -206,11 +206,9 @@ export async function startScheduler() {
         if (!device) continue;
         scheduleDevice(device);
         deviceSnapshots.set(device.id, device.updatedAt);
-        console.log(
-          isNew
-            ? `Novo dispositivo adicionado: ${device.name}`
-            : `Dispositivo atualizado, reagendando: ${device.name}`
-        );
+        log("info", isNew ? "Novo dispositivo adicionado." : "Dispositivo atualizado, reagendando.", {
+          device: device.name,
+        });
       }
     }
   }, 30_000);
@@ -233,7 +231,9 @@ export async function pruneHistory() {
     db.statusHistory.deleteMany({ where: { timestamp: { lt: cutoff } } }),
     db.linkEvent.deleteMany({ where: { timestamp: { lt: cutoff } } }),
   ]);
-  console.log(
-    `[Retenção] ${statusResult.count} registros de histórico e ${eventResult.count} eventos de link removidos (anteriores a ${cutoff.toLocaleDateString("pt-BR")}).`
-  );
+  log("info", "[Retenção] registros removidos.", {
+    statusHistory: statusResult.count,
+    linkEvents: eventResult.count,
+    cutoff: cutoff.toISOString(),
+  });
 }

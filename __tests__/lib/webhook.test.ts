@@ -2,10 +2,12 @@
  * @jest-environment node
  */
 
-import { generateWebhookToken, verifyWebhookToken } from "@/lib/webhook";
+import { generateWebhookToken, verifyWebhookToken, validateSecret } from "@/lib/webhook";
+
+const VALID_SECRET = "test-secret-for-jest-at-least-32chars!";
 
 beforeEach(() => {
-  process.env.WEBHOOK_SECRET = "test-secret-for-jest";
+  process.env.WEBHOOK_SECRET = VALID_SECRET;
 });
 
 afterEach(() => {
@@ -29,6 +31,27 @@ describe("generateWebhookToken", () => {
   it("throws when WEBHOOK_SECRET is not set", () => {
     delete process.env.WEBHOOK_SECRET;
     expect(() => generateWebhookToken("link-1")).toThrow("WEBHOOK_SECRET");
+  });
+});
+
+describe("validateSecret", () => {
+  it("does not throw when WEBHOOK_SECRET is 32+ characters", () => {
+    expect(() => validateSecret()).not.toThrow();
+  });
+
+  it("throws when WEBHOOK_SECRET is missing", () => {
+    delete process.env.WEBHOOK_SECRET;
+    expect(() => validateSecret()).toThrow("WEBHOOK_SECRET");
+  });
+
+  it("throws when WEBHOOK_SECRET is shorter than 32 characters", () => {
+    process.env.WEBHOOK_SECRET = "tooshort";
+    expect(() => validateSecret()).toThrow("WEBHOOK_SECRET");
+  });
+
+  it("accepts a secret of exactly 32 characters", () => {
+    process.env.WEBHOOK_SECRET = "a".repeat(32);
+    expect(() => validateSecret()).not.toThrow();
   });
 });
 
