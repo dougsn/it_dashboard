@@ -1,24 +1,24 @@
 # Relatório de Segurança — IT Dashboard
 
-**Data da análise:** 2026-06-02  
+**Última atualização:** 2026-06-05  
 **Versão do sistema:** 0.1.0  
 **Analista:** Análise automatizada via Claude Code  
-**Escopo:** Código-fonte completo — Next.js (frontend/API), worker de monitoramento, banco de dados SQLite
+**Escopo:** Código-fonte completo — Next.js (frontend/API), worker de monitoramento, banco PostgreSQL
 
 ---
 
 ## Sumário Executivo
 
-O IT Dashboard é uma aplicação interna para monitoramento de equipamentos de rede. Por ser voltado para uso local e não ser exposto à internet, o risco geral é **moderado**, mas existem vulnerabilidades que devem ser endereçadas antes de qualquer exposição externa ou em ambientes com múltiplos usuários.
+O IT Dashboard é uma aplicação interna para monitoramento de equipamentos de rede. Por ser voltado para uso local e não exposto à internet, o risco geral é **baixo a moderado**. As vulnerabilidades críticas e de alta severidade identificadas na análise inicial foram resolvidas.
 
-| Severidade | Quantidade | Status |
-|-----------|-----------|--------|
-| 🔴 Crítico  | 1 | Aberto |
-| 🟠 Alto     | 2 | Aberto |
-| 🟡 Médio    | 3 | Aberto |
-| 🔵 Baixo    | 3 | Aberto |
-| ℹ️ Info     | 3 | Aberto |
-| **Total**  | **12** | |
+| Severidade | Total | Resolvido | Aberto |
+|-----------|-------|-----------|--------|
+| 🔴 Crítico  | 1     | 1         | 0      |
+| 🟠 Alto     | 2     | 2         | 0      |
+| 🟡 Médio    | 3     | 1         | 2      |
+| 🔵 Baixo    | 3     | 0         | 3      |
+| ℹ️ Info     | 9     | 2         | 7      |
+| **Total**  | **18**| **6**     | **12** |
 
 ---
 
@@ -27,151 +27,50 @@ O IT Dashboard é uma aplicação interna para monitoramento de equipamentos de 
 ---
 
 ### SEC-001 — Secret JWT com fallback hardcoded
-**Severidade:** 🔴 CRÍTICO  
+**Severidade:** 🔴 CRÍTICO — ✅ RESOLVIDO  
 **Categoria:** Autenticação  
-**Arquivo:** `lib/auth.ts:20`
+**Resolvido em:** branch `feat/final-quality-push`
 
-```typescript
-secret: process.env.NEXTAUTH_SECRET ?? "dev-secret",
-```
-
-**Descrição:**  
-Se a variável de ambiente `NEXTAUTH_SECRET` não estiver definida, o sistema usa `"dev-secret"` como chave de assinatura dos tokens JWT. Este valor é público (está no repositório), o que permite que qualquer pessoa forje tokens de sessão válidos sem conhecer a senha de nenhum usuário.
-
-**Impacto:** Controle total do sistema sem autenticação válida.
-
-**Mitigação:**
-```typescript
-// lib/auth.ts
-const secret = process.env.NEXTAUTH_SECRET;
-if (!secret) throw new Error("NEXTAUTH_SECRET não está definido. Configure a variável de ambiente.");
-```
-Adicionar ao `.env.example`:
-```
-NEXTAUTH_SECRET=gere-um-valor-com-openssl-rand-base64-32
-```
+`lib/auth.ts` valida `NEXTAUTH_SECRET` obrigatório no startup. `lib/crypto.ts` também valida `ENCRYPTION_KEY` e lança erro imediato se ausente. `.env.example` publicado no repositório com placeholders seguros.
 
 ---
 
 ### SEC-002 — Credenciais RouterOS armazenadas em texto plano
-**Severidade:** 🟠 ALTO  
+**Severidade:** 🟠 ALTO — ✅ RESOLVIDO  
 **Categoria:** Proteção de dados  
-**Arquivo:** `prisma/schema.prisma` (campos `routerosUser`, `routerosPass`)
+**Resolvido em:** versão inicial com `lib/crypto.ts`
 
-**Descrição:**  
-Senhas de acesso aos equipamentos Mikrotik e community strings SNMP são gravadas sem criptografia no banco SQLite. Qualquer processo ou usuário com acesso ao arquivo `prisma/dev.db` pode ler todas as credenciais de rede.
-
-**Impacto:** Comprometimento de todos os equipamentos monitorados.
-
-**Mitigação:**
-1. Criptografar campos antes de gravar no banco usando AES-256-GCM
-2. Usar `NEXTAUTH_SECRET` como chave de derivação para criptografia
-3. Descriptografar somente no worker no momento do uso
-
-```typescript
-// lib/crypto.ts
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "crypto";
-
-const KEY = scryptSync(process.env.NEXTAUTH_SECRET!, "salt", 32);
-
-export function encrypt(text: string): string { /* ... */ }
-export function decrypt(ciphertext: string): string { /* ... */ }
-```
+Campos `routerosUser` e `routerosPass` são criptografados com AES-256-GCM (IV aleatório por operação) antes de gravar no banco. Descriptografados apenas no worker no momento de uso via `resolveRouterosCredentials()`. Campos plaintext nunca retornam nas respostas da API (`sanitizeDevice()`).
 
 ---
 
-### SEC-003 — Sem rate limiting no login
-**Severidade:** 🟠 ALTO  
+### SEC-003 — Sem rate limiting no endpoint de login
+**Severidade:** 🟠 ALTO — ✅ RESOLVIDO  
 **Categoria:** Controle de acesso  
-**Arquivo:** `app/api/auth/[...nextauth]/route.ts`
+**Resolvido em:** `middleware.ts`
 
-**Descrição:**  
-O endpoint de autenticação não possui limitação de taxa. Ataques de força bruta são triviais — um script pode testar milhares de senhas por minuto sem qualquer impedimento.
-
-**Impacto:** Comprometimento do painel por força bruta de senha.
-
-**Mitigação:**
-```bash
-npm install next-rate-limit
-```
-```typescript
-// middleware.ts
-import { rateLimit } from "next-rate-limit";
-
-const limiter = rateLimit({
-  interval: 5 * 60 * 1000, // 5 minutos
-  uniqueTokenPerInterval: 500,
-});
-
-export async function middleware(request: NextRequest) {
-  if (request.nextUrl.pathname.startsWith("/api/auth/callback")) {
-    try {
-      await limiter.check(5, request.ip ?? "127.0.0.1"); // max 5 tentativas
-    } catch {
-      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
-    }
-  }
-  // ... resto do middleware
-}
-```
+Rate limiting implementado: 10 tentativas por IP em janela de 15 minutos. Retorna 429 ao exceder o limite. Estado mantido em memória (ver SEC-014).
 
 ---
 
 ### SEC-004 — Ausência de headers de segurança HTTP
-**Severidade:** 🟡 MÉDIO  
+**Severidade:** 🟡 MÉDIO — ✅ RESOLVIDO  
 **Categoria:** Configuração  
-**Arquivo:** `next.config.ts`
+**Resolvido em:** `next.config.ts`
 
-**Descrição:**  
-A aplicação não define headers de segurança padrão. Ausência de CSP aumenta risco de XSS; ausência de X-Frame-Options permite clickjacking; ausência de HSTS permite downgrade de HTTPS para HTTP.
-
-**Mitigação:**
-```typescript
-// next.config.ts
-const securityHeaders = [
-  { key: "X-DNS-Prefetch-Control", value: "on" },
-  { key: "X-XSS-Protection", value: "1; mode=block" },
-  { key: "X-Frame-Options", value: "SAMEORIGIN" },
-  { key: "X-Content-Type-Options", value: "nosniff" },
-  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline';" },
-];
-
-export default {
-  async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }];
-  },
-};
-```
+Headers implementados: `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, `Content-Security-Policy`. HSTS ativo apenas em produção (`NODE_ENV=production`).
 
 ---
 
 ### SEC-005 — Tráfego sem criptografia (HTTP)
-**Severidade:** 🟡 MÉDIO  
-**Categoria:** Transporte seguro  
+**Severidade:** 🟡 MÉDIO — 🔴 ABERTO  
+**Categoria:** Transporte seguro
 
-**Descrição:**  
-O dashboard roda em HTTP. Credenciais digitadas no formulário de login são enviadas em texto plano na rede local. ARP spoofing ou monitoramento passivo de rede expõe senhas.
+O dashboard não inclui TLS por padrão — responsabilidade da infraestrutura. Para uso em produção, configurar reverse proxy com TLS.
 
-**Mitigação:**  
-Usar nginx ou Caddy como reverse proxy com TLS:
-
-```nginx
-# /etc/nginx/sites-available/it-dashboard
-server {
-  listen 443 ssl;
-  ssl_certificate /etc/ssl/certs/dashboard.crt;
-  ssl_certificate_key /etc/ssl/private/dashboard.key;
-  location / { proxy_pass http://localhost:3000; }
-}
-server {
-  listen 80;
-  return 301 https://$host$request_uri;
-}
+**Mitigação recomendada:**
 ```
-
-Ou com Caddy (automático):
-```
+# Caddy (automático, certificado autoassinado)
 dashboard.local {
   reverse_proxy localhost:3000
   tls internal
@@ -180,171 +79,166 @@ dashboard.local {
 
 ---
 
-### SEC-006 — Permissões do arquivo SQLite
-**Severidade:** 🔵 BAIXO  
-**Categoria:** Proteção de dados  
-**Arquivo:** `prisma/dev.db`
+### SEC-006 — Permissões do banco de dados
+**Severidade:** 🔵 BAIXO — 🔴 ABERTO  
+**Categoria:** Proteção de dados
 
-**Descrição:**  
-O arquivo de banco de dados usa as permissões padrão do filesystem, permitindo leitura por outros usuários do sistema.
+O banco PostgreSQL corre em container Docker. Permissões de acesso dependem da configuração do host e do `docker-compose.yml`. Em ambiente multi-usuário, verificar que o socket do Docker não é acessível a usuários não autorizados.
 
-**Mitigação:**
-```bash
-chmod 600 prisma/dev.db
-chown <service-user>:<service-user> prisma/dev.db
-```
-Adicionar ao script de inicialização do serviço.
+**Mitigação:** Configurar `DATABASE_URL` com credenciais dedicadas de leitura/escrita mínimas. Não usar o usuário `postgres` padrão em produção.
 
 ---
 
 ### SEC-007 — Sem auditoria de ações administrativas
-**Severidade:** 🔵 BAIXO  
-**Categoria:** Rastreabilidade  
+**Severidade:** 🔵 BAIXO — 🔴 ABERTO  
+**Categoria:** Rastreabilidade
 
-**Descrição:**  
-Não há registro de quem criou, editou ou removeu dispositivos. Impossível investigar alterações não autorizadas.
+Não há registro de quem criou, editou ou removeu dispositivos, links e notas.
 
-**Mitigação:**  
-Adicionar modelo `AuditLog` ao schema Prisma e registrar em todos os handlers de API:
-
-```prisma
-model AuditLog {
-  id        String   @id @default(cuid())
-  action    String   // CREATE | UPDATE | DELETE
-  entity    String   // Device | Note
-  entityId  String
-  userId    String
-  payload   String   // JSON
-  createdAt DateTime @default(now())
-}
-```
+**Mitigação futura:** Adicionar modelo `AuditLog` ao schema Prisma com campos `action`, `entity`, `entityId`, `userId`, `payload` e `createdAt`. Registrar em todos os handlers PUT/DELETE/POST.
 
 ---
 
-### SEC-008 — Worker com privilégios completos
-**Severidade:** 🔵 BAIXO  
-**Categoria:** Princípio do menor privilégio  
-**Arquivo:** `worker/monitors/ping.ts`
+### SEC-008 — Worker com privilégios do processo pai
+**Severidade:** 🔵 BAIXO — 🔴 ABERTO  
+**Categoria:** Menor privilégio  
 
-**Descrição:**  
-O worker executa com os privilégios do usuário que iniciou o processo. O pacote `ping` executa binários do sistema (`/bin/ping`). Endereços IP não são validados antes de serem passados aos monitores.
+O worker executa com os privilégios do usuário que iniciou o processo. O Dockerfile já cria usuário não-root `app` para o container — em deploy via Docker o risco é mitigado. Em execução direta (`npm run worker`), o worker roda com o usuário do terminal.
 
-**Mitigação:**
-1. Executar o worker com usuário de serviço dedicado (`useradd -r -s /bin/false it-worker`)
-2. Validar formato de IP antes de passar para monitores:
-```typescript
-const IP_REGEX = /^(\d{1,3}\.){3}\d{1,3}$|^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+$/;
-if (!IP_REGEX.test(device.ip)) return;
-```
+**Mitigação:** Em produção, sempre usar o container Docker que já aplica `USER app`.
 
 ---
 
 ### SEC-009 — Autenticação de fator único
-**Severidade:** ℹ️ INFO  
-**Categoria:** Autenticação  
+**Severidade:** ℹ️ INFO — 🔴 ABERTO  
+**Categoria:** Autenticação
 
-**Descrição:**  
-Apenas usuário e senha protegem o acesso ao painel.
+Apenas usuário e senha protegem o acesso. Sem 2FA/TOTP.
 
-**Mitigação:**  
-Implementar TOTP como segundo fator opcional usando `otplib`:
-```bash
-npm install otplib qrcode
-```
+**Mitigação futura:** Implementar TOTP opcional com `otplib` e QR code na primeira configuração.
 
 ---
 
-### SEC-010 — Validação de formato de IP ausente
-**Severidade:** ℹ️ INFO  
-**Categoria:** Validação de entrada  
-**Arquivo:** `app/api/devices/route.ts:9`
+### SEC-010 — Validação de IP aceita octetos fora do range padrão
+**Severidade:** ℹ️ INFO — ⚠️ ACEITO (design intencional)  
+**Categoria:** Validação de entrada
 
-**Descrição:**  
-O campo `ip` aceita qualquer string não vazia, permitindo cadastro de IPs malformados.
-
-**Mitigação:**
-```typescript
-// Adicionar ao deviceSchema
-ip: z.string()
-  .min(1)
-  .refine(
-    (v) => /^(\d{1,3}\.){3}\d{1,3}$/.test(v) || /^([a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+$/.test(v),
-    { message: "IP ou hostname inválido" }
-  ),
-```
+O campo `ip` aceita qualquer string não vazia sem validar formato IPv4 estrito. Isso é intencional: o dashboard monitora dispositivos WireGuard com endereços `10.255.255.x/29` que poderiam ser rejeitados por validações mais restritivas. O risco de injection via IP é mitigado pelo uso de bibliotecas (`ping`, `routeros`, `net-snmp`) que não passam o IP para shell diretamente.
 
 ---
 
 ### SEC-011 — Sem timeout de sessão explícito
-**Severidade:** ℹ️ INFO  
-**Categoria:** Gerenciamento de sessão  
-**Arquivo:** `lib/auth.ts`
+**Severidade:** ℹ️ INFO — 🔴 ABERTO  
+**Categoria:** Gerenciamento de sessão
 
-**Descrição:**  
-Tokens JWT usam o maxAge padrão do NextAuth. Sessões de usuários que saem do escritório sem fazer logout permanecem válidas.
+Tokens JWT usam o `maxAge` padrão do NextAuth (30 dias).
 
-**Mitigação:**
+**Mitigação futura:**
 ```typescript
 // lib/auth.ts
-session: {
-  strategy: "jwt",
-  maxAge: 8 * 60 * 60, // 8 horas
-},
+session: { strategy: "jwt", maxAge: 8 * 60 * 60 }, // 8 horas
 ```
 
 ---
 
-### SEC-012 — Sem limite de tamanho nas requisições
-**Severidade:** ℹ️ INFO  
-**Categoria:** DoS  
-**Arquivo:** `app/api/devices/route.ts`
+### SEC-012 — Sem limite de tamanho explícito nas requisições
+**Severidade:** ℹ️ INFO — 🔴 ABERTO  
+**Categoria:** DoS
 
-**Descrição:**  
-Payloads de qualquer tamanho são aceitos nas rotas de API.
+Payloads de qualquer tamanho são aceitos. Os schemas Zod limitam o conteúdo por campo (`max(100)`, `max(500)`), mas não há limite de bytes no corpo da requisição.
 
-**Mitigação:**
-```typescript
-// next.config.ts
-export default {
-  experimental: {
-    serverActions: { bodySizeLimit: "1mb" },
-  },
-};
-```
+**Mitigação futura:** Configurar `bodySizeLimit` no `next.config.ts`.
 
 ---
 
-## Plano de Mitigação Priorizado
+### SEC-013 — req.json() sem guard contra JSON malformado
+**Severidade:** ℹ️ INFO — ✅ RESOLVIDO  
+**Categoria:** Tratamento de erros  
+**Resolvido em:** branch `fix/json-parse-guard`
 
-| Prioridade | Item | Esforço | Risco se não corrigido |
-|-----------|------|---------|----------------------|
-| 1 | SEC-001: Validar NEXTAUTH_SECRET obrigatório | Baixo (5min) | Crítico — bypass de autenticação |
-| 2 | SEC-003: Rate limiting no login | Médio (2h) | Alto — força bruta |
-| 3 | SEC-002: Criptografar credenciais de equipamentos | Alto (1 dia) | Alto — exposição de infraestrutura |
-| 4 | SEC-005: Configurar TLS/HTTPS | Médio (2h) | Médio — sniffing de rede |
-| 5 | SEC-004: Adicionar security headers | Baixo (30min) | Médio — XSS/clickjacking |
-| 6 | SEC-006: Permissões do arquivo SQLite | Baixo (5min) | Médio — leitura não autorizada |
-| 7 | SEC-007: Auditoria de ações | Alto (1 dia) | Baixo — rastreabilidade |
-| 8 | SEC-008: Validação de IP no worker | Baixo (30min) | Baixo — injection |
-| 9 | SEC-011: Session maxAge | Baixo (5min) | Info — sessões longas |
-| 10 | SEC-010: Validação de formato IP | Baixo (15min) | Info — dados inconsistentes |
+8 rotas de API expunham `SyntaxError` não tratada quando o body da requisição era JSON inválido, resultando em resposta 500 em vez de 400. Corrigido com helper `lib/parse-body.ts` aplicado em todas as rotas POST/PUT.
+
+---
+
+### SEC-014 — Rate limiting em memória (não persiste entre restarts)
+**Severidade:** ℹ️ INFO — 🔴 ABERTO  
+**Categoria:** Controle de acesso
+
+O rate limiter do login mantém estado em um `Map` em memória. O contador zera em cada reinício do processo e não é compartilhado entre réplicas.
+
+**Impacto:** Baixo no contexto single-instance atual. Em deploy com múltiplas réplicas, o limite efetivo seria multiplicado pelo número de instâncias.
+
+**Mitigação futura:** Mover estado do rate limiter para Redis ou tabela do banco com TTL.
+
+---
+
+### SEC-015 — CSP inclui unsafe-eval (limitação do Next.js 14)
+**Severidade:** ℹ️ INFO — ⚠️ ACEITO (limitação do framework)  
+**Categoria:** Content Security Policy
+
+O Next.js 14 com App Router requer `unsafe-eval` no CSP para funcionamento interno. Remover essa diretiva quebraria o framework.
+
+**Contexto:** O risco prático é baixo em dashboard interno sem conteúdo de usuário renderizado como HTML. A alternativa seria migrar para Next.js 15+ que suporta nonces, eliminando a necessidade de `unsafe-eval`.
+
+---
+
+### SEC-016 — Endpoints de webhook sem autenticação de sessão
+**Severidade:** ℹ️ INFO — ⚠️ ACEITO (design intencional)  
+**Categoria:** Autenticação
+
+As rotas `GET /api/links/:id/up` e `GET /api/links/:id/down` não exigem sessão — protegidas apenas por HMAC-SHA256 via query param `?token=`. Isso é intencional para integração com Zabbix, Nagios e scripts externos.
+
+**Risco residual:** Vazamento de `WEBHOOK_SECRET` permite mudar status de qualquer link. Não há log de auditoria para chamadas webhook (IP de origem, timestamp).
+
+**Mitigação futura:** Adicionar logging estruturado com IP de origem em cada chamada webhook.
+
+---
+
+### SEC-017 — startScheduler sem cobertura de testes
+**Severidade:** ℹ️ INFO — 🔴 ABERTO  
+**Categoria:** Qualidade / Operacional
+
+A função que orquestra heartbeat, reconciliação de devices e polling de links não possui testes de integração. Bugs de inicialização só são detectados em runtime.
+
+**Mitigação futura:** Teste de integração com fake timers, mockando `db.device.findMany` e verificando criação e drenagem dos intervals.
+
+---
+
+### SEC-018 — Sem timeout global na inicialização do worker
+**Severidade:** ℹ️ INFO — 🔴 ABERTO  
+**Categoria:** Operacional / Resiliência
+
+Se o banco ficar indisponível na subida, `startScheduler()` pode travar indefinidamente em `db.device.findMany()` sem encerrar o processo nem emitir sinal de falha ao orquestrador (Docker/systemd).
+
+**Mitigação futura:** Adicionar `AbortSignal` com timeout em `startScheduler()` ou watchdog via `setTimeout` que chama `process.exit(1)` se a inicialização não completar em 30 segundos.
+
+---
+
+## Plano de Mitigação — Itens Abertos
+
+| # | Item | Severidade | Esforço | Prioridade |
+|---|------|-----------|---------|-----------|
+| SEC-005 | Configurar TLS/HTTPS via reverse proxy | 🟡 Médio | Infra (1h) | Alta |
+| SEC-006 | Permissões do banco / credenciais mínimas | 🔵 Baixo | Infra (30min) | Média |
+| SEC-007 | Auditoria de ações administrativas | 🔵 Baixo | Código (1 dia) | Média |
+| SEC-008 | Sempre usar container Docker em produção | 🔵 Baixo | Infra (0) | Baixa |
+| SEC-011 | Session maxAge de 8h | ℹ️ Info | Código (5min) | Baixa |
+| SEC-012 | Limite de tamanho de requisição | ℹ️ Info | Código (15min) | Baixa |
+| SEC-014 | Rate limiter persistente (Redis/banco) | ℹ️ Info | Código (4h) | Baixa |
+| SEC-017 | Testes para startScheduler | ℹ️ Info | Código (2h) | Baixa |
+| SEC-018 | Timeout de inicialização do worker | ℹ️ Info | Código (30min) | Baixa |
+| SEC-009 | 2FA/TOTP opcional | ℹ️ Info | Código (1 dia) | Muito baixa |
 
 ---
 
 ## Rastreamento no Dashboard
 
-Todos os achados desta análise foram importados como notas no sistema.  
-Para importar: `npm run seed:security`  
-Para visualizar: acesse `/notes` no dashboard e filtre por **Categoria: Segurança**.
+Todos os achados abertos foram importados como notas em `/notes`.  
+Para inserir novas notas: `npx tsx scripts/add-security-notes.ts`  
+Para importar o conjunto inicial: `npm run seed:security`
 
 ---
 
-## Observações de Contexto
+## Contexto de Uso
 
-Este dashboard é projetado para uso **exclusivamente na rede local interna**. O nível de risco é significativamente menor comparado a uma aplicação exposta à internet. No entanto:
-
-- Ameaças internas (funcionários) existem
-- Dispositivos de rede comprometidos podem atacar a rede interna
-- Boas práticas de segurança reduzem a superfície de ataque mesmo em ambientes controlados
-
-**Prioridade mínima recomendada:** corrigir SEC-001 (5 minutos de trabalho) antes de qualquer uso em produção.
+Este dashboard é projetado para uso **exclusivamente na rede local interna**. O nível de risco é significativamente menor comparado a uma aplicação exposta à internet. As vulnerabilidades críticas e de alta severidade foram resolvidas. Os itens abertos restantes são adequados para resolução incremental sem bloquear o uso em produção em ambiente controlado.

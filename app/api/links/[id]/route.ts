@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
+import { parseBody } from "@/lib/parse-body";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -29,8 +30,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const body = await req.json();
-  const parsed = updateSchema.safeParse(body);
+  const raw = await parseBody(req);
+  if (!raw.ok) return raw.response;
+  const parsed = updateSchema.safeParse(raw.data);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   try {

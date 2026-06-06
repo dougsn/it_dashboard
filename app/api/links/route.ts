@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { generateWebhookToken } from "@/lib/webhook";
+import { parseBody } from "@/lib/parse-body";
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
@@ -35,8 +36,9 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
-  const parsed = createSchema.safeParse(body);
+  const raw = await parseBody(req);
+  if (!raw.ok) return raw.response;
+  const parsed = createSchema.safeParse(raw.data);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const link = await db.link.create({ data: parsed.data });

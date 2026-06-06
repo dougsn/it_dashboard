@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { bulkDeviceSchema } from "@/lib/schemas/device";
 import { encrypt } from "@/lib/crypto";
+import { parseBody } from "@/lib/parse-body";
 
 function ipToInt(ip: string): number | null {
   const parts = ip.split(".").map(Number);
@@ -23,8 +24,9 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
-  const parsed = bulkDeviceSchema.safeParse(body);
+  const raw = await parseBody(req);
+  if (!raw.ok) return raw.response;
+  const parsed = bulkDeviceSchema.safeParse(raw.data);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }

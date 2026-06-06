@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { checkLinkTraffic } from "@/worker/monitors/link-traffic";
 import { resolveRouterosCredentials } from "@/lib/crypto";
+import { parseBody } from "@/lib/parse-body";
 
 const schema = z.object({
   mikrotikDeviceId: z.string().min(1),
@@ -14,8 +15,9 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
-  const parsed = schema.safeParse(body);
+  const raw = await parseBody(req);
+  if (!raw.ok) return raw.response;
+  const parsed = schema.safeParse(raw.data);
   if (!parsed.success) {
     return NextResponse.json({ error: "Parâmetros inválidos" }, { status: 400 });
   }

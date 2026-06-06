@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { z } from "zod";
 import { deviceConfigSchema } from "@/lib/schemas/device";
 import { encrypt, resolveRouterosCredentials } from "@/lib/crypto";
+import { parseBody } from "@/lib/parse-body";
 import type { Device } from "@prisma/client";
 
 const deviceTypeSchema = z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER"]);
@@ -43,8 +44,9 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
-  const parsed = deviceConfigSchema.safeParse(body);
+  const raw = await parseBody(req);
+  if (!raw.ok) return raw.response;
+  const parsed = deviceConfigSchema.safeParse(raw.data);
 
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
