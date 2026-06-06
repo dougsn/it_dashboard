@@ -32,7 +32,7 @@ import { checkSnmp }        from "@/worker/monitors/snmp";
 import { checkRouterOS }    from "@/worker/monitors/routeros";
 import { checkLinkTraffic } from "@/worker/monitors/link-traffic";
 import { resolveRouterosCredentials } from "@/lib/crypto";
-import { runChecks, pruneHistory, pollLinks } from "@/worker/scheduler";
+import { runChecks, pruneHistory, pollLinks, shutdown } from "@/worker/scheduler";
 
 const mockDb                     = db as jest.Mocked<typeof db>;
 const mockCheckPing               = checkPing        as jest.Mock;
@@ -304,5 +304,24 @@ describe("pollLinks", () => {
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("[Link]")
     );
+  });
+});
+
+// ─── shutdown ─────────────────────────────────────────────────────────────────
+
+describe("shutdown", () => {
+  it("resolves without throwing when there are no pending checks", async () => {
+    await expect(shutdown(100)).resolves.toBeUndefined();
+  });
+
+  it("resolves within the timeout even with a short deadline", async () => {
+    const start = Date.now();
+    await shutdown(50);
+    expect(Date.now() - start).toBeLessThan(300);
+  });
+
+  it("resolves again after being called a second time (idempotent)", async () => {
+    await shutdown(50);
+    await expect(shutdown(50)).resolves.toBeUndefined();
   });
 });

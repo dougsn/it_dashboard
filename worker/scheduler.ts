@@ -10,8 +10,33 @@ import type { Device, Link } from "@prisma/client";
 
 const RETENTION_DAYS = 30;
 
-const timers = new Map<string, ReturnType<typeof setInterval>>();
+const timers          = new Map<string, ReturnType<typeof setInterval>>();
 const deviceSnapshots = new Map<string, Date>(); // deviceId -> last known updatedAt
+const pendingChecks   = new Set<Promise<unknown>>();
+const allIntervals    = new Set<ReturnType<typeof setInterval>>();
+
+function trackAsync<T>(p: Promise<T>): Promise<T> {
+  pendingChecks.add(p);
+  void p.finally(() => pendingChecks.delete(p));
+  return p;
+}
+
+function makeInterval(fn: () => void, ms: number) {
+  const id = setInterval(fn, ms);
+  allIntervals.add(id);
+  return id;
+}
+
+export async function shutdown(timeoutMs = 10_000): Promise<void> {
+  for (const id of allIntervals) clearInterval(id);
+  allIntervals.clear();
+  timers.clear();
+  const deadline = new Promise<void>((r) => {
+    const t = setTimeout(r, timeoutMs);
+    if (typeof t === "object" && t !== null && "unref" in t) (t as NodeJS.Timeout).unref();
+  });
+  await Promise.race([Promise.allSettled([...pendingChecks]), deadline]);
+}
 
 export async function runChecks(device: Device) {
   const results = await Promise.allSettled([
@@ -73,13 +98,17 @@ export async function runChecks(device: Device) {
 }
 
 function scheduleDevice(device: Device) {
-  if (timers.has(device.id)) clearInterval(timers.get(device.id)!);
+  const existing = timers.get(device.id);
+  if (existing) {
+    clearInterval(existing);
+    allIntervals.delete(existing);
+  }
 
   const intervalMs = device.checkInterval * 1000;
 
-  runChecks(device).catch(() => {});
+  void trackAsync(runChecks(device).catch(() => {}));
 
-  const timer = setInterval(() => runChecks(device).catch(() => {}), intervalMs);
+  const timer = makeInterval(() => void trackAsync(runChecks(device).catch(() => {})), intervalMs);
   timers.set(device.id, timer);
 }
 
@@ -87,6 +116,7 @@ function unscheduleDevice(deviceId: string) {
   const timer = timers.get(deviceId);
   if (timer) {
     clearInterval(timer);
+    allIntervals.delete(timer);
     timers.delete(deviceId);
     deviceSnapshots.delete(deviceId);
   }
@@ -137,11 +167,11 @@ export async function startScheduler() {
   }
   console.log(`${devices.length} dispositivo(s) agendado(s).`);
 
-  void pollLinks();
+  void trackAsync(pollLinks());
 
   // Run history pruning at startup then every 24h
-  void pruneHistory();
-  setInterval(pruneHistory, 24 * 3_600_000);
+  void trackAsync(pruneHistory());
+  makeInterval(() => void trackAsync(pruneHistory()), 24 * 3_600_000);
 
   // Heartbeat: lets /api/health detect if the worker has stopped
   const updateHeartbeat = () =>
@@ -149,11 +179,11 @@ export async function startScheduler() {
       .upsert({ where: { id: 1 }, update: {}, create: { id: 1, seenAt: new Date() } })
       .catch(() => {});
   void updateHeartbeat();
-  setInterval(updateHeartbeat, 60_000);
+  makeInterval(updateHeartbeat, 60_000);
 
   // Reconcile device list every 30s: add new, remove deleted, reschedule updated
   // Uses a lean select for change detection; fetches full device only when needed.
-  setInterval(async () => {
+  makeInterval(async () => {
     const snapshots = await db.device.findMany({
       select: { id: true, name: true, updatedAt: true },
     });
@@ -185,7 +215,7 @@ export async function startScheduler() {
     }
   }, 30_000);
 
-  setInterval(pollLinks, 60_000);
+  makeInterval(() => void trackAsync(pollLinks()), 60_000);
 }
 
 export async function pollLinks() {

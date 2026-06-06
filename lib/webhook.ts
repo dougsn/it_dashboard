@@ -1,5 +1,13 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
+export function validateSecret(): void {
+  if (!process.env.WEBHOOK_SECRET) {
+    throw new Error(
+      "WEBHOOK_SECRET não está definido. Gere com: openssl rand -hex 32"
+    );
+  }
+}
+
 export function generateWebhookToken(linkId: string): string {
   const secret = process.env.WEBHOOK_SECRET;
   if (!secret) {
