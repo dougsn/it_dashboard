@@ -27,9 +27,9 @@ export async function GET(req: Request) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const hours = Math.min(parseInt(searchParams.get("hours") ?? "168"), 720);
-  const page  = Math.max(1, parseInt(searchParams.get("page")  ?? "1"));
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "25")));
+  const hours = Math.min(parseInt(searchParams.get("hours") ?? "") || 168, 720);
+  const page  = Math.max(1, parseInt(searchParams.get("page")  ?? "") || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "") || 25));
   const since = new Date(Date.now() - hours * 3_600_000);
 
   const devices = await db.device.findMany({

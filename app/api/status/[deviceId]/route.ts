@@ -11,7 +11,7 @@ export async function GET(
 
   const { deviceId } = await params;
   const { searchParams } = new URL(req.url);
-  const hours = Math.min(parseInt(searchParams.get("hours") ?? "24"), 168);
+  const hours = Math.min(parseInt(searchParams.get("hours") ?? "") || 24, 168);
 
   const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
