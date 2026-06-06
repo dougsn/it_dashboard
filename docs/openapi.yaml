@@ -1,0 +1,1614 @@
+openapi: 3.1.0
+
+info:
+  title: WatchIT Tower Monitoramento — API
+  version: "1.0.0"
+  description: |
+    API REST do WatchIT Tower Monitoramento — dashboard local de monitoramento de infraestrutura de TI.
+
+    ## Autenticação
+
+    A maioria dos endpoints exige uma sessão NextAuth ativa (cookie de sessão JWT).
+    Faça login em `POST /api/auth/callback/credentials` e inclua o cookie `next-auth.session-token`
+    nas requisições subsequentes.
+
+    ### Exceções (sem autenticação de sessão)
+    - `GET /api/health` — público, sem autenticação
+    - `POST /api/links/{id}/up` e `POST /api/links/{id}/down` — autenticados por HMAC-SHA256 via header `x-webhook-token` ou query string `?token=`
+
+    ## Rate Limiting
+    O endpoint de login (`POST /api/auth/callback/credentials`) tem rate limit de
+    **10 tentativas por IP em 15 minutos**.
+
+servers:
+  - url: http://localhost:3000
+    description: Desenvolvimento local
+
+tags:
+  - name: Autenticação
+    description: Login e sessão
+  - name: Dispositivos
+    description: CRUD de dispositivos monitorados
+  - name: Status
+    description: Histórico de status e métricas de dispositivos
+  - name: Links
+    description: Gerenciamento de links WAN e tráfego
+  - name: Incidentes
+    description: Incidentes e linha do tempo de eventos
+  - name: Notas
+    description: Notas de segurança e issues operacionais
+  - name: Sistema
+    description: Saúde do sistema e dados do overview
+
+# ─── Componentes reutilizáveis ──────────────────────────────────────────────
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: next-auth.session-token
+      description: Cookie de sessão JWT gerado pelo NextAuth após login bem-sucedido.
+
+    webhookToken:
+      type: apiKey
+      in: header
+      name: x-webhook-token
+      description: |
+        Token HMAC-SHA256 gerado com `WEBHOOK_SECRET + linkId`.
+        Pode ser enviado como header `x-webhook-token` ou query string `?token=`.
+
+  schemas:
+    # ── Enums ──────────────────────────────────────────────────────────────
+    DeviceType:
+      type: string
+      enum: [MIKROTIK, DVR, CAMERA, OTHER]
+      description: Tipo do dispositivo.
+
+    NoteSeverity:
+      type: string
+      enum: [INFO, WARNING, HIGH, CRITICAL]
+      description: Severidade da nota.
+
+    NoteCategory:
+      type: string
+      enum: [SECURITY, OPERATIONAL, GENERAL]
+      description: Categoria da nota.
+
+    NoteStatus:
+      type: string
+      enum: [OPEN, IN_PROGRESS, RESOLVED]
+      description: Status de resolução da nota.
+
+    LinkEventType:
+      type: string
+      enum: [UP, DOWN]
+      description: Tipo do evento de link.
+
+    TimelineEventKind:
+      type: string
+      enum: [DEVICE_OFFLINE, DEVICE_ONLINE, DEVICE_HIGH_LATENCY, LINK_DOWN, LINK_UP]
+      description: |
+        Tipo do evento na linha do tempo unificada.
+        - `DEVICE_OFFLINE` — device ficou offline
+        - `DEVICE_ONLINE` — device se recuperou
+        - `DEVICE_HIGH_LATENCY` — ping ultrapassou 150ms pela primeira vez
+        - `LINK_DOWN` — link WAN ficou offline (via webhook)
+        - `LINK_UP` — link WAN voltou a ficar online (via webhook)
+
+    SegmentState:
+      type: string
+      enum: [online, offline, degraded, empty]
+      description: |
+        Estado de um segmento horário de disponibilidade de link.
+        - `online` — ficou online durante a hora inteira
+        - `offline` — ficou offline ao final da hora
+        - `degraded` — teve evento DOWN mas terminou UP
+        - `empty` — sem dados (antes do período rastreado)
+
+    # ── Modelos principais ─────────────────────────────────────────────────
+    Device:
+      type: object
+      description: Dispositivo monitorado com todas as suas configurações de protocolo.
+      properties:
+        id:
+          type: string
+          description: CUID único do dispositivo.
+          example: "clxyz123456789"
+        name:
+          type: string
+          example: "Mikrotik Matriz"
+        ip:
+          type: string
+          format: ipv4
+          example: "192.168.1.1"
+        type:
+          $ref: "#/components/schemas/DeviceType"
+        location:
+          type: string
+          nullable: true
+          example: "Rack Sala de TI"
+        notes:
+          type: string
+          nullable: true
+          example: "Roteador principal. Não reiniciar sem aviso."
+        pingEnabled:
+          type: boolean
+          default: true
+        httpEnabled:
+          type: boolean
+          default: false
+        httpPort:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 65535
+          example: 80
+        httpPath:
+          type: string
+          default: "/"
+          example: "/status"
+        snmpEnabled:
+          type: boolean
+          default: false
+        snmpCommunity:
+          type: string
+          default: "public"
+        snmpPort:
+          type: integer
+          default: 161
+        routerosEnabled:
+          type: boolean
+          default: false
+        routerosUser:
+          type: string
+          nullable: true
+          example: "admin"
+        routerosPass:
+          type: string
+          nullable: true
+          writeOnly: true
+          example: "senha123"
+        routerosPort:
+          type: integer
+          default: 8728
+        checkInterval:
+          type: integer
+          description: Intervalo entre checagens em segundos (mínimo 10, máximo 3600).
+          default: 60
+          minimum: 10
+          maximum: 3600
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        currentStatus:
+          $ref: "#/components/schemas/DeviceStatus"
+          nullable: true
+      required: [id, name, ip, type, pingEnabled, httpEnabled, snmpEnabled, routerosEnabled, checkInterval, createdAt, updatedAt]
+
+    DeviceStatus:
+      type: object
+      description: Resultado mais recente da checagem do dispositivo (upsertado a cada ciclo).
+      properties:
+        id:
+          type: string
+        deviceId:
+          type: string
+        isOnline:
+          type: boolean
+          description: Se o dispositivo respondeu ao último check.
+        pingMs:
+          type: integer
+          nullable: true
+          description: Latência do ping em milissegundos.
+          example: 3
+        httpOk:
+          type: boolean
+          nullable: true
+          description: Se o HTTP check retornou código 2xx.
+        uptime:
+          type: integer
+          nullable: true
+          description: Uptime do dispositivo em segundos (via SNMP ou RouterOS).
+        cpuLoad:
+          type: number
+          format: float
+          nullable: true
+          description: Uso de CPU em percentual (0-100).
+          example: 12.5
+        memoryUsed:
+          type: number
+          format: float
+          nullable: true
+          description: Uso de memória em percentual (0-100).
+          example: 45.2
+        checkedAt:
+          type: string
+          format: date-time
+          description: Timestamp da última checagem.
+      required: [id, deviceId, isOnline, checkedAt]
+
+    StatusHistoryEntry:
+      type: object
+      description: Registro histórico de um ciclo de checagem de um dispositivo.
+      properties:
+        id:
+          type: string
+        deviceId:
+          type: string
+        isOnline:
+          type: boolean
+        pingMs:
+          type: integer
+          nullable: true
+        cpuLoad:
+          type: number
+          format: float
+          nullable: true
+        memoryUsed:
+          type: number
+          format: float
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+      required: [id, deviceId, isOnline, timestamp]
+
+    Link:
+      type: object
+      description: Link WAN com configuração de RouterOS e banda contratada.
+      properties:
+        id:
+          type: string
+          example: "clxyz987654321"
+        name:
+          type: string
+          example: "Link Fibra - Matriz"
+        description:
+          type: string
+          nullable: true
+          example: "Fibra 500Mbps - Operadora X"
+        location:
+          type: string
+          nullable: true
+          example: "Sala de TI - Rack 1"
+        isOnline:
+          type: boolean
+          description: Estado atual do link (atualizado por webhook ou worker).
+        lastEventAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp do último evento UP/DOWN.
+        mikrotikDeviceId:
+          type: string
+          nullable: true
+          description: ID do dispositivo Mikrotik responsável por monitorar este link.
+        mikrotikInterface:
+          type: string
+          nullable: true
+          example: "ether1"
+          description: Nome exato da interface no RouterOS (ex: ether1, sfp-sfpplus1, bridge).
+        contractedDownloadBps:
+          type: integer
+          nullable: true
+          description: Banda de download contratada em bits/segundo.
+          example: 500000000
+        contractedUploadBps:
+          type: integer
+          nullable: true
+          description: Banda de upload contratada em bits/segundo.
+          example: 100000000
+        downloadBps:
+          type: integer
+          nullable: true
+          description: Tráfego de download atual em bits/segundo (atualizado pelo worker).
+          example: 127500000
+        uploadBps:
+          type: integer
+          nullable: true
+          description: Tráfego de upload atual em bits/segundo (atualizado pelo worker).
+          example: 8300000
+        latencyMs:
+          type: integer
+          nullable: true
+          description: Latência atual do link em milissegundos (atualizado pelo worker).
+          example: 4
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, isOnline, createdAt, updatedAt]
+
+    LinkEvent:
+      type: object
+      description: Evento UP ou DOWN registrado para um link.
+      properties:
+        id:
+          type: string
+        linkId:
+          type: string
+        type:
+          $ref: "#/components/schemas/LinkEventType"
+        timestamp:
+          type: string
+          format: date-time
+      required: [id, linkId, type, timestamp]
+
+    Note:
+      type: object
+      description: Nota de segurança ou issue operacional, opcionalmente associada a um dispositivo.
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+          maxLength: 200
+          example: "Senha padrão no roteador de filial"
+        content:
+          type: string
+          example: "O Mikrotik da filial Norte ainda usa a senha padrão admin/admin. Trocar imediatamente."
+        severity:
+          $ref: "#/components/schemas/NoteSeverity"
+        category:
+          $ref: "#/components/schemas/NoteCategory"
+        status:
+          $ref: "#/components/schemas/NoteStatus"
+        deviceId:
+          type: string
+          nullable: true
+          description: ID do dispositivo relacionado à nota.
+        device:
+          type: object
+          nullable: true
+          description: Dados resumidos do dispositivo associado.
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            ip:
+              type: string
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Preenchido automaticamente quando status muda para RESOLVED.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, title, content, severity, category, status, createdAt, updatedAt]
+
+    Incident:
+      type: object
+      description: Período de indisponibilidade de um dispositivo, derivado do StatusHistory.
+      properties:
+        id:
+          type: string
+          description: ID composto de `{deviceId}-{startAt timestamp}`.
+        deviceId:
+          type: string
+        deviceName:
+          type: string
+        deviceType:
+          $ref: "#/components/schemas/DeviceType"
+        startAt:
+          type: string
+          format: date-time
+          description: Início do incidente (quando o device ficou offline).
+        endAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fim do incidente. `null` se ainda estiver aberto.
+        durationMs:
+          type: integer
+          nullable: true
+          description: Duração em milissegundos. Para incidentes abertos, é calculado até o momento atual.
+        resolved:
+          type: boolean
+          description: "`true` se o device voltou a ficar online dentro do período consultado."
+      required: [id, deviceId, deviceName, deviceType, startAt, resolved]
+
+    TimelineEvent:
+      type: object
+      description: Evento na linha do tempo unificada de dispositivos e links.
+      properties:
+        id:
+          type: string
+          description: ID único do evento (composto para eventos de device, ID do LinkEvent para links).
+        kind:
+          $ref: "#/components/schemas/TimelineEventKind"
+        entityId:
+          type: string
+          description: ID do dispositivo ou link que gerou o evento.
+        entityName:
+          type: string
+          description: Nome do dispositivo ou link.
+        entityType:
+          oneOf:
+            - $ref: "#/components/schemas/DeviceType"
+            - type: string
+              enum: [LINK]
+          description: Tipo da entidade — um dos tipos de device ou `LINK`.
+        location:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        value:
+          type: number
+          description: |
+            Valor numérico opcional. Para `DEVICE_HIGH_LATENCY`, contém o pingMs no momento do evento.
+      required: [id, kind, entityId, entityName, entityType, timestamp]
+
+    HealthData:
+      type: object
+      description: Resumo de saúde do sistema nas últimas 24 horas.
+      properties:
+        totalChecks:
+          type: integer
+          description: Total de checagens realizadas.
+          example: 1440
+        onlineChecks:
+          type: integer
+          description: Número de checagens em que o device estava online.
+          example: 1425
+        uptimePct:
+          type: number
+          format: float
+          description: Percentual de uptime (0-100).
+          example: 98.96
+      required: [totalChecks, onlineChecks, uptimePct]
+
+    OverviewData:
+      type: object
+      description: Dados para o overview dashboard — sparklines de devices e segmentos de links.
+      properties:
+        sparklines:
+          type: object
+          description: |
+            Mapa de `deviceId → array de pingMs` (últimas 60 leituras das últimas 6 horas).
+            Valores `null` indicam que o device estava offline no momento da leitura.
+          additionalProperties:
+            type: array
+            items:
+              type: integer
+              nullable: true
+          example:
+            "clxyz123": [3, 4, null, null, 5, 3]
+        linkSegments:
+          type: object
+          description: |
+            Mapa de `linkId → array de 24 SegmentState` (um por hora, da mais antiga para a mais recente).
+          additionalProperties:
+            type: array
+            items:
+              $ref: "#/components/schemas/SegmentState"
+            minItems: 24
+            maxItems: 24
+          example:
+            "clxyz987": ["online", "online", "degraded", "offline", "online"]
+      required: [sparklines, linkSegments]
+
+    # ── Payloads de criação/edição ─────────────────────────────────────────
+    DeviceInput:
+      type: object
+      description: Campos para criar ou atualizar um dispositivo. Todos os campos são opcionais no PUT (PATCH semântico).
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "Mikrotik Filial Norte"
+        ip:
+          type: string
+          format: ipv4
+          example: "10.0.1.1"
+          description: Endereço IPv4 do dispositivo (formato `x.x.x.x`).
+        type:
+          $ref: "#/components/schemas/DeviceType"
+        location:
+          type: string
+          maxLength: 200
+          example: "Rack Filial Norte"
+        notes:
+          type: string
+          maxLength: 1000
+        pingEnabled:
+          type: boolean
+          default: true
+        httpEnabled:
+          type: boolean
+          default: false
+        httpPort:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          nullable: true
+        httpPath:
+          type: string
+          default: "/"
+        snmpEnabled:
+          type: boolean
+          default: false
+        snmpCommunity:
+          type: string
+          default: "public"
+        snmpPort:
+          type: integer
+          default: 161
+        routerosEnabled:
+          type: boolean
+          default: false
+        routerosUser:
+          type: string
+          nullable: true
+        routerosPass:
+          type: string
+          nullable: true
+        routerosPort:
+          type: integer
+          default: 8728
+        checkInterval:
+          type: integer
+          minimum: 10
+          maximum: 3600
+          default: 60
+
+    BulkDeviceInput:
+      type: object
+      description: |
+        Criação em massa de dispositivos por faixa de IP.
+        O nome de cada device será `"{name} {último octeto}"` (ex: "Camera 101" para o IP .101).
+        Máximo de 254 dispositivos por operação.
+      required: [ipStart, ipEnd, name, type]
+      properties:
+        ipStart:
+          type: string
+          format: ipv4
+          example: "192.168.2.100"
+          description: Primeiro IP da faixa (inclusive).
+        ipEnd:
+          type: string
+          format: ipv4
+          example: "192.168.2.150"
+          description: Último IP da faixa (inclusive).
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "Camera"
+        type:
+          $ref: "#/components/schemas/DeviceType"
+        location:
+          type: string
+          maxLength: 200
+        pingEnabled:
+          type: boolean
+          default: true
+        httpEnabled:
+          type: boolean
+          default: false
+        httpPort:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          nullable: true
+        checkInterval:
+          type: integer
+          minimum: 10
+          maximum: 3600
+          default: 60
+
+    LinkInput:
+      type: object
+      description: Campos para criar ou atualizar um link WAN.
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "Link Fibra 500M"
+        description:
+          type: string
+          maxLength: 500
+          nullable: true
+          example: "Fibra dedicada - Operadora XYZ"
+        location:
+          type: string
+          maxLength: 100
+          nullable: true
+          example: "Sala de TI - Patch Panel 2"
+        mikrotikDeviceId:
+          type: string
+          nullable: true
+          description: ID do dispositivo Mikrotik para monitoramento de tráfego.
+        mikrotikInterface:
+          type: string
+          maxLength: 50
+          nullable: true
+          example: "ether1"
+        contractedDownloadBps:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Banda de download contratada em bits/segundo.
+          example: 500000000
+        contractedUploadBps:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Banda de upload contratada em bits/segundo.
+          example: 100000000
+
+    NoteInput:
+      type: object
+      description: Campos para criar uma nota de segurança/operacional.
+      required: [title, content]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: "Firewall sem regras de egress"
+        content:
+          type: string
+          minLength: 1
+          example: "O Mikrotik principal não possui regras de saída configuradas, permitindo qualquer tráfego outbound."
+        severity:
+          $ref: "#/components/schemas/NoteSeverity"
+        category:
+          $ref: "#/components/schemas/NoteCategory"
+        status:
+          $ref: "#/components/schemas/NoteStatus"
+        deviceId:
+          type: string
+          nullable: true
+
+    NoteUpdateInput:
+      type: object
+      description: Campos para atualizar uma nota (todos opcionais). Alterar status para RESOLVED define resolvedAt automaticamente.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        content:
+          type: string
+          minLength: 1
+        severity:
+          $ref: "#/components/schemas/NoteSeverity"
+        category:
+          $ref: "#/components/schemas/NoteCategory"
+        status:
+          $ref: "#/components/schemas/NoteStatus"
+        deviceId:
+          type: string
+          nullable: true
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    # ── Respostas de erro ──────────────────────────────────────────────────
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          oneOf:
+            - type: string
+              example: "Unauthorized"
+            - type: object
+              description: Objeto de erros de validação Zod (fieldErrors + formErrors).
+      required: [error]
+
+    WebhookResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+        status:
+          type: string
+          enum: [up, down]
+          example: "up"
+      required: [ok, status]
+
+# ─── Security global (aplicada a todos os endpoints, sobrescrita individualmente) ───
+security:
+  - sessionCookie: []
+
+# ─── Paths ──────────────────────────────────────────────────────────────────
+paths:
+
+  # ── Autenticação ──────────────────────────────────────────────────────────
+  /api/auth/callback/credentials:
+    post:
+      tags: [Autenticação]
+      summary: Login com usuário e senha
+      description: |
+        Endpoint gerenciado pelo NextAuth. Autentica o usuário e retorna um cookie de sessão JWT.
+
+        **Rate limit:** 10 tentativas por IP em 15 minutos. Retorna `429` quando o limite é excedido.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: "admin"
+                password:
+                  type: string
+                  format: password
+                  example: "senha-segura-123"
+      responses:
+        "200":
+          description: Login bem-sucedido. O cookie `next-auth.session-token` é definido na resposta.
+        "401":
+          description: Credenciais inválidas.
+        "429":
+          description: Muitas tentativas. Aguarde 15 minutos.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "Muitas tentativas de login. Aguarde 15 minutos."
+
+  # ── Sistema ───────────────────────────────────────────────────────────────
+  /api/health:
+    get:
+      tags: [Sistema]
+      summary: Saúde do sistema (últimas 24h)
+      description: |
+        Retorna o total de checagens, quantas foram bem-sucedidas e o percentual de uptime
+        nas últimas 24 horas. **Este endpoint é público — não exige autenticação.**
+      security: []
+      responses:
+        "200":
+          description: Dados de saúde calculados com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthData"
+              example:
+                totalChecks: 1440
+                onlineChecks: 1425
+                uptimePct: 98.96
+
+  /api/overview:
+    get:
+      tags: [Sistema]
+      summary: Dados do overview dashboard
+      description: |
+        Retorna dados agregados para o overview:
+        - **Sparklines:** últimas 60 leituras de ping por device (janela de 6h)
+        - **Segmentos de link:** 24 slots horários de disponibilidade por link (janela de 24h)
+      responses:
+        "200":
+          description: Dados do overview calculados com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OverviewData"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/timeline:
+    get:
+      tags: [Incidentes]
+      summary: Linha do tempo unificada de eventos
+      description: |
+        Retorna eventos de devices (transições OFFLINE/ONLINE/HIGH_LATENCY derivadas do StatusHistory)
+        e de links (eventos UP/DOWN do LinkEvent), mesclados e ordenados do mais recente para o mais antigo.
+
+        **Lógica de emissão de eventos de device:**
+        - `DEVICE_OFFLINE` — transição de `isOnline=true` para `false`
+        - `DEVICE_ONLINE` — transição de `isOnline=false` para `true`
+        - `DEVICE_HIGH_LATENCY` — primeira checagem acima de 150ms enquanto o device está online (apenas na borda de subida)
+      parameters:
+        - in: query
+          name: hours
+          schema:
+            type: integer
+            default: 24
+            minimum: 1
+            maximum: 168
+          description: Janela de tempo em horas (máximo 168h = 7 dias). Padrão 24h.
+      responses:
+        "200":
+          description: Lista de eventos ordenados do mais recente para o mais antigo.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimelineEvent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/incidents:
+    get:
+      tags: [Incidentes]
+      summary: Histórico de incidentes por dispositivo
+      description: |
+        Retorna incidentes (períodos de indisponibilidade) derivados do StatusHistory.
+        Incidentes sem `endAt` são incidentes abertos (device ainda offline).
+
+        Os incidentes são ordenados do mais recente para o mais antigo.
+      parameters:
+        - in: query
+          name: hours
+          schema:
+            type: integer
+            default: 168
+            minimum: 1
+            maximum: 720
+          description: Janela de tempo em horas (máximo 720h = 30 dias). Padrão 168h (7 dias).
+      responses:
+        "200":
+          description: Lista de incidentes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Incident"
+              example:
+                - id: "clxyz123-1717610400000"
+                  deviceId: "clxyz123"
+                  deviceName: "Mikrotik Filial Norte"
+                  deviceType: "MIKROTIK"
+                  startAt: "2026-06-05T12:00:00.000Z"
+                  endAt: "2026-06-05T12:35:00.000Z"
+                  durationMs: 2100000
+                  resolved: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Dispositivos ──────────────────────────────────────────────────────────
+  /api/devices:
+    get:
+      tags: [Dispositivos]
+      summary: Listar dispositivos
+      description: |
+        Retorna todos os dispositivos com o status mais recente (`currentStatus`) incluído.
+        Use o parâmetro `type` para filtrar por tipo — útil ao popular dropdowns de Mikrotik em formulários de link.
+      parameters:
+        - in: query
+          name: type
+          schema:
+            $ref: "#/components/schemas/DeviceType"
+          description: Filtrar por tipo de dispositivo.
+          example: MIKROTIK
+      responses:
+        "200":
+          description: Lista de dispositivos ordenada por nome.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Device"
+        "400":
+          description: Tipo de dispositivo inválido.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "Tipo de dispositivo inválido"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags: [Dispositivos]
+      summary: Criar dispositivo
+      description: Cria um novo dispositivo monitorado. O worker começará a monitorá-lo no próximo ciclo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceInput"
+            example:
+              name: "Mikrotik Matriz"
+              ip: "192.168.1.1"
+              type: "MIKROTIK"
+              location: "Sala de TI"
+              pingEnabled: true
+              routerosEnabled: true
+              routerosUser: "admin"
+              routerosPass: "senha123"
+              checkInterval: 30
+      responses:
+        "201":
+          description: Dispositivo criado com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/devices/bulk:
+    post:
+      tags: [Dispositivos]
+      summary: Criar dispositivos em massa (por faixa de IP)
+      description: |
+        Cria múltiplos dispositivos de uma vez especificando uma faixa de IP (`ipStart` a `ipEnd`).
+        O nome de cada dispositivo será `"{name} {último octeto do IP}"` — ex: nome `"Camera"` + IP `192.168.2.101` = `"Camera 101"`.
+
+        IPs já existentes são ignorados (`skipDuplicates: true`).
+        Limite de 254 dispositivos por operação.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkDeviceInput"
+            example:
+              ipStart: "192.168.2.100"
+              ipEnd: "192.168.2.120"
+              name: "Camera"
+              type: "CAMERA"
+              location: "Estacionamento"
+              pingEnabled: true
+              checkInterval: 60
+      responses:
+        "201":
+          description: Criação concluída. Retorna contagem e lista de IPs criados.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created:
+                    type: integer
+                    description: Número de dispositivos efetivamente criados (IPs duplicados não contam).
+                    example: 21
+                  ips:
+                    type: array
+                    items:
+                      type: string
+                    description: Lista de IPs criados.
+                    example: ["192.168.2.100", "192.168.2.101"]
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/devices/{id}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceId"
+
+    get:
+      tags: [Dispositivos]
+      summary: Buscar dispositivo por ID
+      responses:
+        "200":
+          description: Dispositivo encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [Dispositivos]
+      summary: Atualizar dispositivo
+      description: Atualiza parcialmente um dispositivo (todos os campos são opcionais — comportamento PATCH).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceInput"
+      responses:
+        "200":
+          description: Dispositivo atualizado com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      tags: [Dispositivos]
+      summary: Excluir dispositivo
+      description: Remove o dispositivo e todos os seus dados históricos (StatusHistory + DeviceStatus) em cascata.
+      responses:
+        "204":
+          description: Dispositivo excluído com sucesso.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Status / histórico ────────────────────────────────────────────────────
+  /api/status/{deviceId}:
+    get:
+      tags: [Status]
+      summary: Histórico de status de um dispositivo
+      description: |
+        Retorna as entradas do StatusHistory de um dispositivo dentro da janela de tempo especificada,
+        ordenadas por timestamp crescente. Limitado a 500 registros.
+      parameters:
+        - in: path
+          name: deviceId
+          required: true
+          schema:
+            type: string
+          description: ID do dispositivo.
+          example: "clxyz123456789"
+        - in: query
+          name: hours
+          schema:
+            type: integer
+            default: 24
+            minimum: 1
+            maximum: 168
+          description: Janela de tempo em horas (máximo 168h = 7 dias). Padrão 24h.
+      responses:
+        "200":
+          description: Histórico de status ordenado por timestamp.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StatusHistoryEntry"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Links ─────────────────────────────────────────────────────────────────
+  /api/links:
+    get:
+      tags: [Links]
+      summary: Listar links WAN
+      description: Retorna todos os links ordenados por data de criação (mais recentes primeiro), incluindo contagem de eventos.
+      responses:
+        "200":
+          description: Lista de links.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: "#/components/schemas/Link"
+                    - type: object
+                      properties:
+                        _count:
+                          type: object
+                          properties:
+                            events:
+                              type: integer
+                              description: Total de eventos UP/DOWN registrados para este link.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags: [Links]
+      summary: Criar link WAN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkInput"
+            example:
+              name: "Link Fibra 500M - Matriz"
+              location: "Sala de TI - Rack 1"
+              mikrotikDeviceId: "clxyz123456789"
+              mikrotikInterface: "ether1"
+              contractedDownloadBps: 500000000
+              contractedUploadBps: 100000000
+      responses:
+        "201":
+          description: Link criado com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Link"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/links/{id}:
+    parameters:
+      - $ref: "#/components/parameters/LinkId"
+
+    get:
+      tags: [Links]
+      summary: Buscar link por ID
+      responses:
+        "200":
+          description: Link encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Link"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [Links]
+      summary: Atualizar link
+      description: Atualiza parcialmente um link (todos os campos são opcionais).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkInput"
+      responses:
+        "200":
+          description: Link atualizado com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Link"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      tags: [Links]
+      summary: Excluir link
+      description: Remove o link e todos os seus eventos (LinkEvent) em cascata.
+      responses:
+        "204":
+          description: Link excluído com sucesso.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/links/{id}/events:
+    get:
+      tags: [Links]
+      summary: Histórico de eventos UP/DOWN de um link
+      description: |
+        Retorna o histórico de eventos UP/DOWN do link na janela de tempo especificada,
+        além do estado inicial do link antes da janela (`lastBefore`) para permitir
+        reconstruir o estado correto nos gráficos.
+      parameters:
+        - $ref: "#/components/parameters/LinkId"
+        - in: query
+          name: hours
+          schema:
+            type: integer
+            default: 24
+            minimum: 1
+            maximum: 720
+          description: Janela de tempo em horas (máximo 720h = 30 dias). Padrão 24h.
+      responses:
+        "200":
+          description: Dados do link com histórico de eventos.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  link:
+                    $ref: "#/components/schemas/Link"
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LinkEvent"
+                    description: Eventos dentro da janela, ordenados por timestamp.
+                  lastBefore:
+                    allOf:
+                      - $ref: "#/components/schemas/LinkEvent"
+                    nullable: true
+                    description: Último evento antes da janela de tempo. Útil para determinar o estado inicial do gráfico.
+                  since:
+                    type: string
+                    format: date-time
+                    description: Timestamp de início da janela consultada.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/links/{id}/up:
+    parameters:
+      - $ref: "#/components/parameters/LinkId"
+    post:
+      tags: [Links]
+      summary: Webhook — marcar link como UP
+      description: |
+        Registra um evento UP e atualiza `isOnline = true` do link.
+        Se o link já estiver online, a chamada é idempotente (retorna `ok: true` sem criar evento duplicado).
+
+        **Autenticação:** token HMAC-SHA256 via header `x-webhook-token` ou query string `?token=`.
+        O token é gerado com `HMAC-SHA256(WEBHOOK_SECRET, linkId)`.
+
+        Aceita tanto `POST` quanto `GET` para compatibilidade com scripts e ferramentas de monitoramento externas.
+      security:
+        - webhookToken: []
+      parameters:
+        - in: query
+          name: token
+          schema:
+            type: string
+          description: Token de autenticação (alternativa ao header `x-webhook-token`).
+      responses:
+        "200":
+          description: Link marcado como UP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookResponse"
+              example:
+                ok: true
+                status: "up"
+        "401":
+          description: Token inválido ou ausente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    get:
+      tags: [Links]
+      summary: Webhook — marcar link como UP (GET)
+      description: Mesmo comportamento do `POST`. Suportado para compatibilidade com ferramentas que só fazem GET.
+      security:
+        - webhookToken: []
+      parameters:
+        - in: query
+          name: token
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Link marcado como UP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookResponse"
+        "401":
+          description: Token inválido ou ausente.
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/links/{id}/down:
+    parameters:
+      - $ref: "#/components/parameters/LinkId"
+    post:
+      tags: [Links]
+      summary: Webhook — marcar link como DOWN
+      description: |
+        Registra um evento DOWN e atualiza `isOnline = false` do link.
+        Se o link já estiver offline, a chamada é idempotente.
+
+        Mesma autenticação do endpoint `/up`.
+      security:
+        - webhookToken: []
+      parameters:
+        - in: query
+          name: token
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Link marcado como DOWN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookResponse"
+              example:
+                ok: true
+                status: "down"
+        "401":
+          description: Token inválido ou ausente.
+        "404":
+          $ref: "#/components/responses/NotFound"
+    get:
+      tags: [Links]
+      summary: Webhook — marcar link como DOWN (GET)
+      description: Mesmo comportamento do `POST`. Suportado para compatibilidade.
+      security:
+        - webhookToken: []
+      parameters:
+        - in: query
+          name: token
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Link marcado como DOWN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookResponse"
+        "401":
+          description: Token inválido ou ausente.
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/links/test-traffic:
+    post:
+      tags: [Links]
+      summary: Testar conexão RouterOS e medir tráfego
+      description: |
+        Valida a conexão RouterOS de um dispositivo Mikrotik e retorna uma amostra de tráfego
+        da interface especificada. Use antes de salvar um link para garantir que as configurações estão corretas.
+
+        O teste executa dois samples de `/interface/print` com 1 segundo de intervalo
+        e calcula `(Δbytes × 8)` para obter bits/segundo.
+
+        **Erros mapeados para mensagens amigáveis:**
+        - Falha de conexão TCP → sugere verificar IP, porta e se a API RouterOS está habilitada
+        - Falha de autenticação → sugere verificar credenciais
+        - Interface não encontrada → sugere verificar o nome exato (ether1, sfp-sfpplus1, bridge, etc.)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mikrotikDeviceId, mikrotikInterface]
+              properties:
+                mikrotikDeviceId:
+                  type: string
+                  description: ID do dispositivo Mikrotik (deve ter `routerosEnabled = true` e credenciais configuradas).
+                  example: "clxyz123456789"
+                mikrotikInterface:
+                  type: string
+                  description: Nome exato da interface no RouterOS.
+                  example: "ether1"
+      responses:
+        "200":
+          description: Conexão bem-sucedida. Retorna tráfego medido.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  downloadBps:
+                    type: integer
+                    description: Download em bits/segundo.
+                    example: 4500000
+                  uploadBps:
+                    type: integer
+                    description: Upload em bits/segundo.
+                    example: 800000
+        "400":
+          description: Parâmetros inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Dispositivo Mikrotik não encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: |
+            Falha na conexão ou configuração do RouterOS.
+            A mensagem de erro é amigável e descreve a causa provável.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                sem_routeros:
+                  summary: RouterOS não habilitado no device
+                  value:
+                    error: 'Dispositivo "Mikrotik Matriz" não tem RouterOS API habilitado ou credenciais configuradas'
+                conexao_falhou:
+                  summary: Falha de conexão TCP
+                  value:
+                    error: "Não foi possível conectar ao Mikrotik 192.168.1.1:8728 — verifique IP, porta e se a API RouterOS está habilitada"
+                interface_invalida:
+                  summary: Interface não encontrada
+                  value:
+                    error: 'Interface "eth0" não encontrada em Mikrotik Matriz — verifique o nome exato (ex: ether1, sfp-sfpplus1, bridge)'
+
+  # ── Notas ─────────────────────────────────────────────────────────────────
+  /api/notes:
+    get:
+      tags: [Notas]
+      summary: Listar notas de segurança e operacionais
+      description: |
+        Retorna todas as notas ordenadas por severidade (CRITICAL primeiro) e depois por data de criação.
+        Inclui dados resumidos do dispositivo associado quando presente.
+      responses:
+        "200":
+          description: Lista de notas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Note"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags: [Notas]
+      summary: Criar nota
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteInput"
+            example:
+              title: "Senha padrão não alterada"
+              content: "O DVR da recepção ainda usa admin/12345. Risco crítico de acesso não autorizado."
+              severity: "CRITICAL"
+              category: "SECURITY"
+              deviceId: "clxyz987654321"
+      responses:
+        "201":
+          description: Nota criada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/notes/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        description: ID da nota.
+
+    get:
+      tags: [Notas]
+      summary: Buscar nota por ID
+      responses:
+        "200":
+          description: Nota encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [Notas]
+      summary: Atualizar nota
+      description: |
+        Atualiza campos da nota (todos opcionais).
+
+        **Comportamento automático de `resolvedAt`:**
+        - Ao mudar `status` para `RESOLVED` sem fornecer `resolvedAt`, o campo é preenchido com o timestamp atual.
+        - Ao mudar `status` para `OPEN` ou `IN_PROGRESS`, `resolvedAt` é limpo automaticamente.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteUpdateInput"
+            example:
+              status: "RESOLVED"
+      responses:
+        "200":
+          description: Nota atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      tags: [Notas]
+      summary: Excluir nota
+      responses:
+        "204":
+          description: Nota excluída com sucesso.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+# ─── Parâmetros e respostas comuns ───────────────────────────────────────────
+components:
+  parameters:
+    DeviceId:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+      description: ID do dispositivo (CUID).
+      example: "clxyz123456789"
+
+    LinkId:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+      description: ID do link (CUID).
+      example: "clxyz987654321"
+
+  responses:
+    Unauthorized:
+      description: Não autenticado. Faça login em `/api/auth/callback/credentials`.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Unauthorized"
+
+    NotFound:
+      description: Recurso não encontrado.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Not found"
+
+    ValidationError:
+      description: Dados de entrada inválidos. Retorna o objeto de erros do Zod.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              fieldErrors:
+                ip: ["Formato de IP inválido"]
+                name: ["String must contain at least 1 character(s)"]
+              formErrors: []
