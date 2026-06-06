@@ -10,9 +10,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 2. Implement the changes
 3. **Wait for user validation before committing**
 4. After user confirms, commit on the branch
-5. Merge into main: `git checkout main && git merge --no-ff branch-name && git branch -d branch-name`
+5. Merge into master: `git checkout master && git merge --no-ff branch-name && git branch -d branch-name`
 
-Never commit directly to `main`. Never merge without explicit user approval.
+Never commit directly to `master`. Never merge without explicit user approval.
+
+### Branch Staleness — Critical Rule
+
+**A branch must live only as long as its work session.** Once a feature or fix is merged, the branch is deleted immediately. If a branch is left open and master moves forward, the branch will diverge and create conflicts.
+
+**Rules to prevent stale branches:**
+- Never start a new branch if an open branch from the same session is waiting for merge approval. Finish one before starting another.
+- If multiple branches exist at the end of a session, list them explicitly and ask the user which to merge or discard before closing.
+- If work on a branch spans more than one session, rebase or merge master into the branch at the start of the new session (`git merge master`) before continuing.
+- Never let a documentation/refactor branch diverge from the code — if code branches land on master, rebase the docs branch before continuing.
+- When in doubt: `git log --oneline master..<branch>` to see how far ahead it is, and `git diff master...<branch> --stat` to see divergence.
 
 ## Common Commands
 
@@ -32,7 +43,7 @@ npm run dev
 npm run worker
 
 # Tests
-npm test                  # Run all tests (85 tests)
+npm test                  # Run all tests (231 tests, 25 suites)
 npm run test:coverage     # With coverage report
 
 # Database
@@ -41,7 +52,8 @@ npm run db:studio         # Open Prisma Studio GUI
 npm run db:generate       # Regenerate Prisma client after schema changes
 
 # Security
-npm run seed:security     # Populate initial security findings as notes
+npm run seed:security     # Populate initial security findings as notes (first time only)
+npx tsx scripts/add-security-notes.ts  # Add new notes without duplicating existing ones
 
 # Type checking
 npx tsc --noEmit
@@ -49,7 +61,7 @@ npx tsc --noEmit
 
 ## Architecture
 
-This is a local IT monitoring dashboard built with:
+This is **WatchIT Tower**, a local IT monitoring dashboard built with:
 - **Next.js 14 (App Router)** — frontend + API routes
 - **shadcn/ui v4 (Base UI)** — component library
 - **Prisma 7 + PostgreSQL** — database via Docker (`docker-compose.yml`)
@@ -85,13 +97,29 @@ npm run db:generate
 
 **Monitoring worker flow:** `worker/scheduler.ts` reads all devices from the DB, sets up a `setInterval` per device (based on `device.checkInterval`), and every tick runs the enabled monitors in parallel via `Promise.allSettled`. Results are written to `DeviceStatus` (upsert, one row per device) and `StatusHistory` (append, for graphs). Links with RouterOS config are polled every 60s via `pollLinks()`.
 
+**Worker graceful shutdown:** `worker/index.ts` traps `SIGTERM`/`SIGINT` and calls `shutdown()` from `scheduler.ts`, which clears all intervals and drains in-flight async operations (tracked via `pendingChecks: Set<Promise<unknown>>`) before calling `db.$disconnect()`. The worker never loses a write mid-flight on container stop.
+
+**Worker heartbeat:** `scheduler.ts` upserts a `WorkerHeartbeat` row every 60 seconds. `/api/health` reads it and reports `workerStatus: "ok" | "stale" | "unknown"` (stale = last heartbeat > 3 minutes ago). This lets the dashboard UI detect a crashed worker.
+
+**Fail-fast at startup:** `worker/index.ts` calls `validateKey()` (from `lib/crypto.ts`) and `validateSecret()` (from `lib/webhook.ts`) before starting the scheduler. If `ENCRYPTION_KEY` or `WEBHOOK_SECRET` are missing or too short, the worker exits immediately with a clear error instead of failing silently later.
+
 **RouterOS traffic measurement:** `/interface/monitor-traffic` is a streaming command and does not accept `=count=` via the API. Instead, `worker/monitors/link-traffic.ts` reads `rx-byte`/`tx-byte` from `/interface/print` twice with a 1-second interval and computes `(Δbytes × 8) = bits/second`.
+
+**Credential encryption:** RouterOS credentials are encrypted with AES-256-GCM (IV random per operation) via `lib/crypto.ts` before being stored. `resolveRouterosCredentials()` decrypts them at use time in the worker. The API never returns plaintext credentials — `sanitizeDevice()` strips all credential fields from responses.
+
+**Webhook authentication:** Link UP/DOWN endpoints (`/api/links/[id]/up|down`) are protected by HMAC-SHA256 tokens generated from `WEBHOOK_SECRET + linkId`. `lib/webhook.ts` exposes `generateWebhookToken()` and `verifyWebhookToken()` using `crypto.timingSafeEqual` to prevent timing attacks.
+
+**JSON body parsing:** All POST/PUT API routes use `parseBody()` from `lib/parse-body.ts` instead of calling `req.json()` directly. This returns a typed `{ ok: true, data }` or `{ ok: false, response: NextResponse 400 }` so malformed JSON never leaks a 500 `SyntaxError`.
+
+**Rate limiting:** `middleware.ts` applies a 10-request / 15-minute limit per IP on `POST /api/auth/callback/credentials`. State is in-process memory — does not survive restarts. Acceptable for single-instance use.
 
 **shadcn/ui v4 uses Base UI:** The `Button` component does not support `asChild`. Use `buttonVariants()` with a Next.js `<Link>` when you need a link styled as a button. For dialogs, use the `render` prop on Base UI trigger components.
 
 **Authentication middleware:** `middleware.ts` protects all routes except `/login` and `/api/auth/*`. The session is JWT-based, no database sessions.
 
 **`GET /api/devices` supports `?type=` filter** — pass a `DeviceType` value (e.g. `?type=MIKROTIK`) to filter by device type. Used by the link form to populate the Mikrotik dropdown.
+
+**Structured logging:** The worker uses `lib/logger.ts` (`log("info"|"warn"|"error", msg, ctx)`) which emits JSON to stdout. Never use `console.log` directly in `worker/`.
 
 ### File Structure
 
@@ -111,28 +139,30 @@ app/
                           #   form with RouterOS config + contracted bandwidth
       [id]/page.tsx       # Link detail with traffic card
     incidents/
-      page.tsx            # Incidents history page
+      page.tsx            # Incidents history page (paginated)
     notes/
       page.tsx            # Security notes & issue tracking
   api/
     auth/[...nextauth]/   # NextAuth handler
     devices/              # GET all (supports ?type=), POST create
     devices/[id]/         # GET one, PUT update, DELETE
+    devices/bulk/         # POST bulk-create by IP range
     status/[deviceId]/    # GET history (query: ?hours=24)
-    health/               # GET system health summary (uptime %, counts)
+    health/               # GET system health + worker liveness (WorkerHeartbeat)
     overview/             # GET sparklines + link segments for dashboard
-    incidents/            # GET incident list derived from StatusHistory
+    incidents/            # GET paginated incident list derived from StatusHistory
     timeline/             # GET unified event timeline (devices + links, ?hours=24)
     links/                # GET all, POST create
     links/[id]/           # GET one, PUT update, DELETE
-    links/[id]/up|down    # Webhook endpoints to set link status
+    links/[id]/up|down    # Webhook endpoints (HMAC-SHA256, no session required)
+    links/[id]/events/    # GET link event history
     links/test-traffic    # POST: validate RouterOS connection before saving
     notes/                # GET all, POST create
     notes/[id]/           # GET one, PUT update, DELETE
 
 worker/
-  index.ts                # Entry point
-  scheduler.ts            # Per-device setInterval + pollLinks() every 60s
+  index.ts                # Entry point — fail-fast validation, SIGTERM/SIGINT, graceful shutdown
+  scheduler.ts            # Per-device setInterval + pollLinks() every 60s + WorkerHeartbeat
   monitors/
     ping.ts               # ICMP via `ping` package
     http.ts               # HTTP fetch check
@@ -142,8 +172,16 @@ worker/
 
 lib/
   db.ts                   # Prisma client singleton
-  auth.ts                 # NextAuth configuration
+  auth.ts                 # NextAuth configuration (validates NEXTAUTH_SECRET on load)
+  auth.config.ts          # Shared NextAuth config (used by middleware + API route)
+  crypto.ts               # AES-256-GCM encrypt/decrypt + validateKey() fail-fast
+  webhook.ts              # HMAC-SHA256 token generation/verification + validateSecret()
+  parse-body.ts           # Safe req.json() wrapper — returns 400 instead of 500 on bad JSON
+  logger.ts               # Structured JSON logging for worker (log(level, msg, ctx))
   format.ts               # formatUptime, formatResponseTime, formatPercent
+  utils.ts                # cn() className helper
+  schemas/
+    device.ts             # Zod schemas for device create/update/bulk
 
 components/
   device-card.tsx         # Card used in the overview grid
@@ -165,21 +203,53 @@ prisma/
 
 scripts/
   create-user.ts          # CLI to create/update admin user
-  seed-security-notes.ts  # Populates initial security findings as notes
+  seed-security-notes.ts  # Populates initial security findings as notes (first-run only)
+  add-security-notes.ts   # Idempotent: inserts new notes by title without duplicating
+  migrate-credentials.ts  # One-time migration of plaintext credentials to AES-256-GCM
+
+docs/
+  openapi.yaml            # OpenAPI 3.1 spec for all 17 API endpoints
 
 __tests__/
-  lib/                    # Unit tests for format utilities
-  api/                    # API route tests (devices, status, notes)
-  worker/                 # Worker monitor tests (ping, http, snmp, routeros)
+  api/                    # API route tests
+    devices.test.ts       # GET/POST /api/devices
+    devices-id.test.ts    # GET/PUT/DELETE /api/devices/[id]
+    devices-bulk.test.ts  # POST /api/devices/bulk
+    health.test.ts        # GET /api/health (worker liveness, uptime%)
+    incidents.test.ts     # GET /api/incidents (pagination, filters)
+    links.test.ts         # GET/POST/PUT/DELETE /api/links + [id]
+    links-webhook.test.ts # GET /api/links/[id]/up|down (HMAC verification)
+    notes.test.ts         # GET/POST/PUT/DELETE /api/notes
+    overview.test.ts      # GET /api/overview (sparklines, link segments)
+    status.test.ts        # GET /api/status/[deviceId]
+    timeline.test.ts      # GET /api/timeline (event types, dedup, NaN guard)
+  worker/                 # Worker monitor tests
+    ping.test.ts
+    http.test.ts
+    snmp.test.ts
+    routeros.test.ts
+    link-traffic.test.ts
+    scheduler.test.ts     # shutdown drain, idempotency
+  lib/                    # Library unit tests
+    crypto.test.ts        # encrypt/decrypt roundtrip, validateKey
+    webhook.test.ts       # token generation, HMAC verification, validateSecret
+    logger.test.ts        # JSON output, level routing
+    format.test.ts        # formatUptime, formatResponseTime, formatPercent
   components/             # React component tests
-  security/               # Security-focused tests (auth enforcement)
+    device-card.test.tsx
+    status-badge.test.tsx
+  integration/
+    webhook-flow.test.ts  # End-to-end webhook UP/DOWN flow
+  security/
+    api-auth.test.ts      # 401 enforcement on all protected routes
 ```
 
 ### Database Schema Summary
 
-- `Device` — device config (IP, type, location, enabled protocols, credentials, check interval)
+- `Device` — device config (IP, type, location, enabled protocols, encrypted credentials, check interval)
 - `DeviceStatus` — one row per device, latest check result (upserted on each check)
 - `StatusHistory` — append-only log of each check result, indexed by `(deviceId, timestamp)`
+- `WorkerHeartbeat` — singleton row upserted every 60s by the worker; read by `/api/health` to detect crashes
 - `User` — bcrypt-hashed credentials for dashboard login
 - `Note` — security/operational notes with severity (INFO/WARNING/HIGH/CRITICAL), category, and status tracking
 - `Link` — internet link config; fields include `location`, `isOnline`, `mikrotikDeviceId` (FK→Device), `mikrotikInterface`, `downloadBps`, `uploadBps`, `latencyMs` (live traffic from worker), `contractedDownloadBps`, `contractedUploadBps` (manually configured bandwidth ceiling)
@@ -201,3 +271,12 @@ The `BandwidthCell` component (used in the dashboard and links table) shows curr
 - **Red** — above 90%
 
 Contracted values are stored in bps but entered/displayed in Mbps in the form.
+
+### Security Architecture
+
+- **Secrets validation at startup:** `validateKey()` and `validateSecret()` are called before `startScheduler()`. Missing or weak secrets abort the worker immediately.
+- **Credential storage:** `routerosUserEnc` / `routerosPassEnc` fields store AES-256-GCM ciphertext. Plaintext fields (`routerosUser`, `routerosPass`) exist only as transient schema artifacts and are never persisted post-migration.
+- **API credential stripping:** `sanitizeDevice()` removes all four credential fields from every API response, replacing them with `hasRouterosCredentials: boolean`.
+- **Webhook tokens:** Generated as `HMAC-SHA256(WEBHOOK_SECRET, linkId)`, verified with `timingSafeEqual`. No session required on webhook endpoints — they are designed for external integrators (Zabbix, Nagios, scripts).
+- **Rate limiting:** Login endpoint is capped at 10 attempts / 15 min per IP. State is in-memory (see SEC-014 in SECURITY_REPORT.md for known limitation).
+- **Security report:** All known findings (open and resolved) are tracked in `SECURITY_REPORT.md`. New findings should be added there AND inserted into the dashboard via `scripts/add-security-notes.ts`.
