@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { formatUptime, formatResponseTime, formatPercent } from "@/lib/format";
-import { MapPin, Router, HardDrive, Camera, Box } from "lucide-react";
+import { MapPin, Router, HardDrive, Camera, Box, Wifi, Users } from "lucide-react";
 import type { Device, DeviceStatus, DeviceType } from "@prisma/client";
 
 type DeviceWithStatus = Device & { currentStatus: DeviceStatus | null };
@@ -14,6 +14,7 @@ const TYPE_ICON: Record<DeviceType, React.ElementType> = {
   DVR: HardDrive,
   CAMERA: Camera,
   OTHER: Box,
+  UNIFI_AP: Wifi,
 };
 
 const TYPE_LABEL: Record<DeviceType, string> = {
@@ -21,6 +22,7 @@ const TYPE_LABEL: Record<DeviceType, string> = {
   DVR: "DVR",
   CAMERA: "Câmera",
   OTHER: "Outro",
+  UNIFI_AP: "UniFi AP",
 };
 
 function pingQuality(ms: number | null | undefined): "success" | "warning" | "destructive" | "muted" {
@@ -67,6 +69,9 @@ export function DeviceCard({ device }: { device: DeviceWithStatus }) {
   const isOnline = status?.isOnline ?? false;
   const TypeIcon = TYPE_ICON[device.type];
   const quality = pingQuality(status?.pingMs);
+  const unifiClients = device.type === "UNIFI_AP"
+    ? ((status?.unifiData as { totalClients?: number } | null)?.totalClients ?? null)
+    : null;
 
   return (
     <Link href={`/devices/${device.id}`}>
@@ -160,6 +165,17 @@ export function DeviceCard({ device }: { device: DeviceWithStatus }) {
                   <span className="text-[10px] text-muted-foreground w-8 shrink-0">Up</span>
                   <span className="text-xs font-mono text-muted-foreground">
                     {formatUptime(status.uptime)}
+                  </span>
+                </div>
+              )}
+
+              {/* UniFi clients */}
+              {unifiClients != null && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground w-8 shrink-0">Wi-Fi</span>
+                  <Users className="h-3 w-3 text-sky-500 shrink-0" />
+                  <span className="text-xs font-mono text-sky-500 font-semibold">
+                    {unifiClients} cliente{unifiClients !== 1 ? "s" : ""}
                   </span>
                 </div>
               )}

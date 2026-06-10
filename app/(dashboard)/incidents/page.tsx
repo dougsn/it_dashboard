@@ -23,6 +23,7 @@ const TYPE_ICON: Record<DeviceType, React.ElementType> = {
   DVR: HardDrive,
   CAMERA: Camera,
   OTHER: Box,
+  UNIFI_AP: Wifi,
 };
 
 type Window = 24 | 168 | 720;

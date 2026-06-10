@@ -3,8 +3,9 @@ import { checkPing } from "./monitors/ping";
 import { checkHttp } from "./monitors/http";
 import { checkSnmp } from "./monitors/snmp";
 import { checkRouterOS } from "./monitors/routeros";
+import { checkUnifi } from "./monitors/unifi";
 import { checkLinkTraffic } from "./monitors/link-traffic";
-import { resolveRouterosCredentials } from "../lib/crypto";
+import { resolveRouterosCredentials, resolveUnifiApiKey, resolveUnifiCredentials } from "../lib/crypto";
 import { log } from "../lib/logger";
 import type { Device, Link } from "@prisma/client";
 
@@ -52,12 +53,27 @@ export async function runChecks(device: Device) {
       const creds = resolveRouterosCredentials(device);
       return creds ? checkRouterOS(device.ip, creds.user, creds.pass, device.routerosPort) : Promise.resolve(null);
     })(),
+    (() => {
+      if (!device.unifiEnabled) return Promise.resolve(null);
+      const controllerIp = device.unifiControllerIp ?? device.ip;
+      if (device.unifiAuthMethod === "userpass") {
+        const creds = resolveUnifiCredentials(device);
+        return creds
+          ? checkUnifi(device.ip, controllerIp, { method: "userpass", username: creds.username, password: creds.password }, device.unifiPort, device.unifiSite, device.unifiTlsVerify)
+          : Promise.resolve(null);
+      }
+      const apiKey = resolveUnifiApiKey(device);
+      return apiKey
+        ? checkUnifi(device.ip, controllerIp, { method: "apikey", apiKey }, device.unifiPort, device.unifiSite, device.unifiTlsVerify)
+        : Promise.resolve(null);
+    })(),
   ]);
 
   const pingResult     = results[0].status === "fulfilled" ? results[0].value : null;
   const httpResult     = results[1].status === "fulfilled" ? results[1].value : null;
   const snmpResult     = results[2].status === "fulfilled" ? results[2].value : null;
   const routerosResult = results[3].status === "fulfilled" ? results[3].value : null;
+  const unifiResult    = results[4].status === "fulfilled" ? results[4].value : null;
 
   if (results[2].status === "rejected" && device.snmpEnabled) {
     log("error", "[SNMP] monitor falhou", {
@@ -71,29 +87,53 @@ export async function runChecks(device: Device) {
       error: results[3].reason?.message ?? String(results[3].reason),
     });
   }
+  const unifiError = results[4].status === "rejected" && device.unifiEnabled
+    ? (results[4].reason?.message ?? String(results[4].reason))
+    : null;
 
-  const isOnline = pingResult?.alive ?? httpResult?.ok ?? false;
+  if (unifiError) {
+    log("error", "[UniFi] monitor falhou", { device: device.name, ip: device.ip, error: unifiError });
+  }
+
+  const isOnline = pingResult?.alive ?? httpResult?.ok ?? (unifiResult != null ? true : null) ?? false;
   const pingMs   = pingResult?.alive ? pingResult.responseMs : null;
   const httpOk   = httpResult?.ok ?? null;
 
-  const uptime     = routerosResult?.uptime     ?? snmpResult?.uptime     ?? null;
-  const cpuLoad    = routerosResult?.cpuLoad    ?? snmpResult?.cpuLoad    ?? null;
-  const memoryUsed = routerosResult?.memoryUsed ?? snmpResult?.memoryUsed ?? null;
+  const uptime     = routerosResult?.uptime     ?? snmpResult?.uptime     ?? unifiResult?.uptime     ?? null;
+  const cpuLoad    = routerosResult?.cpuLoad    ?? snmpResult?.cpuLoad    ?? unifiResult?.cpuLoad    ?? null;
+  const memoryUsed = routerosResult?.memoryUsed ?? snmpResult?.memoryUsed ?? unifiResult?.memoryUsed ?? null;
 
   const now = new Date();
+
+  // When unifi succeeds: save data and clear any previous error.
+  // When unifi fails: keep stale unifiData but record the error message.
+  // When unifi is disabled: leave both fields untouched (undefined = no-op in Prisma).
+  const unifiUpdate = device.unifiEnabled
+    ? unifiResult
+      ? { unifiData: unifiResult as unknown as import("@prisma/client").Prisma.InputJsonValue, unifiError: null }
+      : { unifiError }
+    : {};
 
   await db.$transaction([
     db.deviceStatus.upsert({
       where: { deviceId: device.id },
-      update: { isOnline, pingMs, httpOk, uptime, cpuLoad, memoryUsed, checkedAt: now },
-      create: { deviceId: device.id, isOnline, pingMs, httpOk, uptime, cpuLoad, memoryUsed, checkedAt: now },
+      update: { isOnline, pingMs, httpOk, uptime, cpuLoad, memoryUsed, ...unifiUpdate, checkedAt: now },
+      create: { deviceId: device.id, isOnline, pingMs, httpOk, uptime, cpuLoad, memoryUsed, ...unifiUpdate, checkedAt: now },
     }),
     db.statusHistory.create({
       data: { deviceId: device.id, isOnline, pingMs, cpuLoad, memoryUsed, timestamp: now },
     }),
   ]);
 
-  log("info", `${isOnline ? "✓" : "✗"} ${device.name}`, { ip: device.ip, pingMs: pingMs ?? null });
+  if (unifiResult) {
+    log("info", `${isOnline ? "✓" : "✗"} ${device.name}`, {
+      ip: device.ip,
+      clients: unifiResult.totalClients,
+      ssids: unifiResult.ssids.length,
+    });
+  } else {
+    log("info", `${isOnline ? "✓" : "✗"} ${device.name}`, { ip: device.ip, pingMs: pingMs ?? null });
+  }
 }
 
 function scheduleDevice(device: Device) {

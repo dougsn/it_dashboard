@@ -3,7 +3,7 @@ import { z } from "zod";
 export const deviceConfigSchema = z.object({
   name: z.string().min(1).max(100),
   ip: z.string().regex(/^(\d{1,3}\.){3}\d{1,3}$/, "Formato de IP inválido"),
-  type: z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER"]),
+  type: z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER", "UNIFI_AP"]),
   location: z.string().max(200).optional(),
   notes: z.string().max(1000).optional(),
   pingEnabled: z.boolean().default(true),
@@ -17,6 +17,15 @@ export const deviceConfigSchema = z.object({
   routerosUser: z.string().optional().nullable(),
   routerosPass: z.string().optional().nullable(),
   routerosPort: z.number().int().min(1).max(65535).default(8728),
+  unifiEnabled: z.boolean().default(false),
+  unifiAuthMethod: z.enum(["apikey", "userpass"]).default("apikey"),
+  unifiApiKey: z.string().optional().nullable(),
+  unifiUser: z.string().optional().nullable(),
+  unifiPass: z.string().optional().nullable(),
+  unifiPort: z.number().int().min(1).max(65535).default(443),
+  unifiSite: z.string().default("default"),
+  unifiTlsVerify: z.boolean().default(false),
+  unifiControllerIp: z.string().regex(/^(\d{1,3}\.){3}\d{1,3}$/, "Formato de IP inválido").optional().nullable(),
   checkInterval: z.number().int().min(10).max(3600).default(60),
 });
 

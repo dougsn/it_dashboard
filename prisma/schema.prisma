@@ -12,6 +12,7 @@ enum DeviceType {
   DVR
   CAMERA
   OTHER
+  UNIFI_AP
 }
 
 model Device {
@@ -36,6 +37,16 @@ model Device {
   routerosPassEnc String? // AES-256-GCM encrypted
   routerosPort    Int     @default(8728)
 
+  unifiEnabled      Boolean @default(false)
+  unifiAuthMethod   String  @default("apikey") // "apikey" | "userpass"
+  unifiApiKeyEnc    String? // AES-256-GCM encrypted API key (X-API-KEY)
+  unifiUserEnc      String? // AES-256-GCM encrypted username (inform API)
+  unifiPassEnc      String? // AES-256-GCM encrypted password (inform API)
+  unifiPort         Int     @default(443)
+  unifiSite         String  @default("default")
+  unifiTlsVerify    Boolean @default(false)
+  unifiControllerIp String? // null = usar o próprio IP do dispositivo (UDM/standalone)
+
   checkInterval Int @default(60)
 
   createdAt DateTime @default(now())
@@ -58,6 +69,8 @@ model DeviceStatus {
   uptime     Int?
   cpuLoad    Float?
   memoryUsed Float?
+  unifiData  Json?
+  unifiError String?
 
   checkedAt DateTime @default(now())
 }

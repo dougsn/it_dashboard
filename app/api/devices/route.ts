@@ -3,17 +3,19 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { deviceConfigSchema } from "@/lib/schemas/device";
-import { encrypt, resolveRouterosCredentials } from "@/lib/crypto";
+import { encrypt, resolveRouterosCredentials, resolveUnifiApiKey, resolveUnifiCredentials } from "@/lib/crypto";
 import { parseBody } from "@/lib/parse-body";
 import type { Device } from "@prisma/client";
 
-const deviceTypeSchema = z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER"]);
+const deviceTypeSchema = z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER", "UNIFI_AP"]);
 
 function sanitizeDevice(device: Device) {
-  const { routerosUser, routerosPass, routerosUserEnc, routerosPassEnc, ...rest } = device;
+  const { routerosUser, routerosPass, routerosUserEnc, routerosPassEnc, unifiApiKeyEnc, unifiUserEnc, unifiPassEnc, ...rest } = device;
   return {
     ...rest,
     hasRouterosCredentials: !!(resolveRouterosCredentials({ routerosUser, routerosPass, routerosUserEnc, routerosPassEnc })),
+    hasUnifiApiKey: !!(resolveUnifiApiKey({ unifiApiKeyEnc })),
+    hasUnifiCredentials: !!(resolveUnifiCredentials({ unifiUserEnc, unifiPassEnc })),
   };
 }
 
@@ -52,13 +54,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { routerosUser, routerosPass, ...rest } = parsed.data;
+  const { routerosUser, routerosPass, unifiApiKey, unifiUser, unifiPass, ...rest } = parsed.data;
 
   const device = await db.device.create({
     data: {
       ...rest,
       routerosUserEnc: routerosUser ? encrypt(routerosUser) : null,
       routerosPassEnc: routerosPass ? encrypt(routerosPass) : null,
+      unifiApiKeyEnc: unifiApiKey ? encrypt(unifiApiKey) : null,
+      unifiUserEnc: unifiUser ? encrypt(unifiUser) : null,
+      unifiPassEnc: unifiPass ? encrypt(unifiPass) : null,
     },
   });
 

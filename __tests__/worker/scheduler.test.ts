@@ -20,9 +20,12 @@ jest.mock("@/worker/monitors/ping",         () => ({ checkPing:        jest.fn()
 jest.mock("@/worker/monitors/http",         () => ({ checkHttp:        jest.fn() }));
 jest.mock("@/worker/monitors/snmp",         () => ({ checkSnmp:        jest.fn() }));
 jest.mock("@/worker/monitors/routeros",     () => ({ checkRouterOS:    jest.fn() }));
+jest.mock("@/worker/monitors/unifi",        () => ({ checkUnifi:       jest.fn() }));
 jest.mock("@/worker/monitors/link-traffic", () => ({ checkLinkTraffic: jest.fn() }));
 jest.mock("@/lib/crypto", () => ({
   resolveRouterosCredentials: jest.fn(),
+  resolveUnifiApiKey:         jest.fn(),
+  resolveUnifiCredentials:    jest.fn(),
 }));
 
 import { db } from "@/lib/db";
@@ -62,6 +65,15 @@ const baseDevice: Device = {
   routerosUserEnc: null,
   routerosPassEnc: null,
   routerosPort:    8728,
+  unifiEnabled:      false,
+  unifiAuthMethod:   "apikey",
+  unifiApiKeyEnc:    null,
+  unifiUserEnc:      null,
+  unifiPassEnc:      null,
+  unifiPort:         443,
+  unifiSite:         "default",
+  unifiTlsVerify:    false,
+  unifiControllerIp: null,
   checkInterval:   60,
   createdAt:       new Date("2026-01-01"),
   updatedAt:       new Date("2026-01-01"),

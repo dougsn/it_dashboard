@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { deviceConfigSchema } from "@/lib/schemas/device";
-import { encrypt, resolveRouterosCredentials } from "@/lib/crypto";
+import { encrypt, resolveRouterosCredentials, resolveUnifiApiKey, resolveUnifiCredentials } from "@/lib/crypto";
 import { Prisma } from "@prisma/client";
 import { parseBody } from "@/lib/parse-body";
 import type { Device } from "@prisma/client";
@@ -10,10 +10,12 @@ import type { Device } from "@prisma/client";
 const updateSchema = deviceConfigSchema.partial();
 
 function sanitizeDevice(device: Device) {
-  const { routerosUser, routerosPass, routerosUserEnc, routerosPassEnc, ...rest } = device;
+  const { routerosUser, routerosPass, routerosUserEnc, routerosPassEnc, unifiApiKeyEnc, unifiUserEnc, unifiPassEnc, ...rest } = device;
   return {
     ...rest,
     hasRouterosCredentials: !!(resolveRouterosCredentials({ routerosUser, routerosPass, routerosUserEnc, routerosPassEnc })),
+    hasUnifiApiKey: !!(resolveUnifiApiKey({ unifiApiKeyEnc })),
+    hasUnifiCredentials: !!(resolveUnifiCredentials({ unifiUserEnc, unifiPassEnc })),
   };
 }
 
@@ -51,15 +53,30 @@ export async function PUT(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { routerosUser, routerosPass, ...rest } = parsed.data;
+  const { routerosUser, routerosPass, unifiApiKey, unifiUser, unifiPass, ...rest } = parsed.data;
 
   // Only update credentials if new non-empty values are provided
-  const credentialUpdate: { routerosUserEnc?: string | null; routerosPassEnc?: string | null } = {};
+  const credentialUpdate: {
+    routerosUserEnc?: string | null;
+    routerosPassEnc?: string | null;
+    unifiApiKeyEnc?: string | null;
+    unifiUserEnc?: string | null;
+    unifiPassEnc?: string | null;
+  } = {};
   if (routerosUser !== undefined) {
     credentialUpdate.routerosUserEnc = routerosUser ? encrypt(routerosUser) : null;
   }
   if (routerosPass !== undefined) {
     credentialUpdate.routerosPassEnc = routerosPass ? encrypt(routerosPass) : null;
+  }
+  if (unifiApiKey !== undefined) {
+    credentialUpdate.unifiApiKeyEnc = unifiApiKey ? encrypt(unifiApiKey) : null;
+  }
+  if (unifiUser !== undefined) {
+    credentialUpdate.unifiUserEnc = unifiUser ? encrypt(unifiUser) : null;
+  }
+  if (unifiPass !== undefined) {
+    credentialUpdate.unifiPassEnc = unifiPass ? encrypt(unifiPass) : null;
   }
 
   try {

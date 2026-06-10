@@ -37,6 +37,7 @@ const TYPE_ICON: Record<DeviceType, React.ElementType> = {
   DVR: HardDrive,
   CAMERA: Camera,
   OTHER: Box,
+  UNIFI_AP: Wifi,
 };
 
 const TYPE_LABEL: Record<DeviceType, string> = {
@@ -44,6 +45,7 @@ const TYPE_LABEL: Record<DeviceType, string> = {
   DVR: "DVR",
   CAMERA: "Câmera",
   OTHER: "Outro",
+  UNIFI_AP: "UniFi AP",
 };
 
 function pingColor(ms: number | null | undefined) {
@@ -78,6 +80,7 @@ const TYPE_ICON_BG: Record<DeviceType, string> = {
   DVR:      "bg-warning/10 text-warning",
   CAMERA:   "bg-destructive/10 text-destructive",
   OTHER:    "bg-muted text-muted-foreground",
+  UNIFI_AP: "bg-sky-500/10 text-sky-500",
 };
 
 function DeviceCard({
@@ -387,7 +390,7 @@ export default function DevicesPage() {
 
           <div className="w-px bg-border mx-0.5 self-stretch" />
 
-          {(["ALL", "MIKROTIK", "DVR", "CAMERA", "OTHER"] as const).map((t) => (
+          {(["ALL", "MIKROTIK", "UNIFI_AP", "DVR", "CAMERA", "OTHER"] as const).map((t) => (
             <FilterChip
               key={t}
               active={typeFilter === t}

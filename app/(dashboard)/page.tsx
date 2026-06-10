@@ -40,16 +40,17 @@ interface LinkItem {
 }
 
 const TYPE_LABELS: Record<DeviceType | "ALL", string> = {
-  ALL: "Todos", MIKROTIK: "Mikrotik", DVR: "DVR", CAMERA: "Câmera", OTHER: "Outro",
+  ALL: "Todos", MIKROTIK: "Mikrotik", DVR: "DVR", CAMERA: "Câmera", OTHER: "Outro", UNIFI_AP: "UniFi AP",
 };
 const TYPE_ICON: Record<DeviceType, React.ElementType> = {
-  MIKROTIK: Router, DVR: HardDrive, CAMERA: Camera, OTHER: Box,
+  MIKROTIK: Router, DVR: HardDrive, CAMERA: Camera, OTHER: Box, UNIFI_AP: Wifi,
 };
 const TYPE_ICON_BG: Record<DeviceType, string> = {
   MIKROTIK: "bg-primary/10 text-primary",
   DVR:      "bg-warning/10 text-warning",
   CAMERA:   "bg-destructive/10 text-destructive",
   OTHER:    "bg-muted text-muted-foreground",
+  UNIFI_AP: "bg-sky-500/10 text-sky-500",
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -374,10 +375,10 @@ function kindLabel(ev: TimelineEvent): string {
 }
 
 const ENTITY_ICON: Record<TimelineEvent["entityType"], React.ElementType> = {
-  MIKROTIK: Router, DVR: HardDrive, CAMERA: Camera, OTHER: Box, LINK: Network,
+  MIKROTIK: Router, DVR: HardDrive, CAMERA: Camera, OTHER: Box, UNIFI_AP: Wifi, LINK: Network,
 };
 const ENTITY_LABEL: Record<TimelineEvent["entityType"], string> = {
-  MIKROTIK: "Mikrotik", DVR: "DVR", CAMERA: "Câmera", OTHER: "Outro", LINK: "Link",
+  MIKROTIK: "Mikrotik", DVR: "DVR", CAMERA: "Câmera", OTHER: "Outro", UNIFI_AP: "UniFi AP", LINK: "Link",
 };
 
 function timeAgo(iso: string): string {
@@ -455,7 +456,7 @@ export default function OverviewPage() {
     if (devRes.ok) setDevices(await devRes.json());
     if (linkRes.ok) setLinks(await linkRes.json());
     if (healthRes.ok) setHealth(await healthRes.json());
-    if (incRes.ok) setIncidents(await incRes.json());
+    if (incRes.ok) { const inc = await incRes.json(); setIncidents(inc.data ?? inc); }
     if (ovRes.ok) setOverviewData(await ovRes.json());
     if (tlRes.ok) setTimeline(await tlRes.json());
     setLastUpdated(new Date());
@@ -467,6 +468,10 @@ export default function OverviewPage() {
   const online = devices.filter((d) => d.currentStatus?.isOnline).length;
   const offline = devices.length - online;
   const instavel = devices.filter((d) => d.currentStatus?.isOnline && (d.currentStatus.pingMs ?? 0) > 150).length;
+  const totalUnifiClients = devices
+    .filter((d) => d.type === "UNIFI_AP" && d.currentStatus?.isOnline)
+    .reduce((sum, d) => sum + (((d.currentStatus?.unifiData as { totalClients?: number } | null)?.totalClients) ?? 0), 0);
+  const unifiAps = devices.filter((d) => d.type === "UNIFI_AP").length;
   const onlineWithPing = devices.filter((d) => d.currentStatus?.isOnline && d.currentStatus.pingMs != null);
   const avgPing = onlineWithPing.length > 0
     ? Math.round(onlineWithPing.reduce((s, d) => s + (d.currentStatus!.pingMs ?? 0), 0) / onlineWithPing.length)
@@ -514,7 +519,7 @@ export default function OverviewPage() {
       <div className="p-7 space-y-6">
 
         {/* KPI cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className={`grid gap-4 grid-cols-2 ${unifiAps > 0 ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
           <KpiCard label="Dispositivos online" value={online} icon={CheckCircle2}
             iconBg="bg-success/10" iconColor="text-success"
             subtitle={devices.length > 0 ? `${Math.round((online / devices.length) * 100)}% de ${devices.length} no total` : undefined}
@@ -531,6 +536,11 @@ export default function OverviewPage() {
             subtitle={pingStatus.label}
             subtitleIcon={pingStatus.label === "Saudável" ? CheckCircle2 : undefined}
             subtitleColor={pingStatus.color} loading={loading} />
+          {unifiAps > 0 && (
+            <KpiCard label="Clientes Wi-Fi" value={totalUnifiClients} icon={Wifi}
+              iconBg="bg-sky-500/10" iconColor="text-sky-500"
+              subtitle={`em ${unifiAps} AP${unifiAps !== 1 ? "s" : ""} UniFi`} loading={loading} />
+          )}
         </div>
 
         {/* Saúde do sistema */}
@@ -768,7 +778,7 @@ export default function OverviewPage() {
               <WifiOff className="h-3 w-3" />Offline
             </FilterChip>
             <div className="w-px bg-border mx-0.5 self-stretch" />
-            {(["ALL", "MIKROTIK", "DVR", "CAMERA", "OTHER"] as const).map((t) => (
+            {(["ALL", "MIKROTIK", "UNIFI_AP", "DVR", "CAMERA", "OTHER"] as const).map((t) => (
               <FilterChip key={t} active={filter === t} onClick={() => setFilter(t)}>
                 {TYPE_LABELS[t]}
                 {t !== "ALL" && (

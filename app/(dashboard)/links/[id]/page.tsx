@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, useRef, use } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/status-badge";
-import { Copy, Check, Activity, Clock, AlertTriangle, ArrowDown, ArrowUp, MapPin } from "lucide-react";
+import { Copy, Check, Activity, Clock, AlertTriangle, ArrowDown, ArrowUp, MapPin, Play, Square, Loader2 } from "lucide-react";
 import { Topbar } from "@/components/topbar";
 import {
   ResponsiveContainer,
@@ -151,12 +151,29 @@ const WINDOWS: { label: string; value: Window }[] = [
   { label: "7d", value: 168 },
 ];
 
+interface LiveSample {
+  downloadBps: number;
+  uploadBps: number;
+  timestamp: string;
+}
+
+const LIVE_MAX_SAMPLES = 30;
+const LIVE_INTERVAL_MS = 3_000;
+
 export default function LinkDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [data, setData] = useState<EventsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [window, setWindow] = useState<Window>(24);
   const [origin, setOrigin] = useState("");
+
+  // Live traffic state
+  const [liveActive, setLiveActive] = useState(false);
+  const [liveSamples, setLiveSamples] = useState<LiveSample[]>([]);
+  const [liveMeasuring, setLiveMeasuring] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const liveMeasuringRef = useRef(false);
 
   useEffect(() => { setOrigin(globalThis.window?.location.origin ?? ""); }, []);
 
@@ -166,6 +183,42 @@ export default function LinkDetailPage({ params }: { params: Promise<{ id: strin
       .then((r) => r.json())
       .then((d) => { setData(d); setLoading(false); });
   }, [id, window]);
+
+  async function measureOnce() {
+    if (liveMeasuringRef.current) return;
+    liveMeasuringRef.current = true;
+    setLiveMeasuring(true);
+    try {
+      const res = await fetch(`/api/links/${id}/live-traffic`);
+      const json = await res.json();
+      if (!res.ok) { setLiveError(json.error ?? "Erro desconhecido"); return; }
+      setLiveError(null);
+      setLiveSamples((prev) => {
+        const next = [...prev, json as LiveSample];
+        return next.length > LIVE_MAX_SAMPLES ? next.slice(next.length - LIVE_MAX_SAMPLES) : next;
+      });
+    } catch {
+      setLiveError("Falha ao conectar à API");
+    } finally {
+      liveMeasuringRef.current = false;
+      setLiveMeasuring(false);
+    }
+  }
+
+  function startLive() {
+    setLiveActive(true);
+    setLiveSamples([]);
+    setLiveError(null);
+    void measureOnce();
+    liveIntervalRef.current = setInterval(() => void measureOnce(), LIVE_INTERVAL_MS);
+  }
+
+  function stopLive() {
+    setLiveActive(false);
+    if (liveIntervalRef.current) { clearInterval(liveIntervalRef.current); liveIntervalRef.current = null; }
+  }
+
+  useEffect(() => () => { if (liveIntervalRef.current) clearInterval(liveIntervalRef.current); }, []);
 
   if (loading) {
     return (
@@ -260,6 +313,118 @@ export default function LinkDetailPage({ params }: { params: Promise<{ id: strin
           </CardContent>
         </Card>
       </div>
+
+      {/* Live traffic widget */}
+      {link.mikrotikInterface && (
+        <Card>
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Activity className="h-3.5 w-3.5 text-primary" />
+                Tráfego em tempo real
+              </span>
+              <Button
+                size="sm"
+                variant={liveActive ? "destructive" : "default"}
+                onClick={liveActive ? stopLive : startLive}
+                className="h-7 text-xs gap-1.5"
+              >
+                {liveMeasuring ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : liveActive ? (
+                  <Square className="h-3 w-3" />
+                ) : (
+                  <Play className="h-3 w-3" />
+                )}
+                {liveActive ? "Parar" : "Iniciar"}
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-4 space-y-3">
+            {!liveActive && liveSamples.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-4">
+                Clique em <strong>Iniciar</strong> para medir o tráfego da interface <code className="bg-muted px-1 rounded">{link.mikrotikInterface}</code> em tempo real — nova leitura a cada {LIVE_INTERVAL_MS / 1000}s.
+              </p>
+            )}
+            {liveError && (
+              <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                {liveError}
+              </div>
+            )}
+            {liveSamples.length > 0 && (() => {
+              const last = liveSamples[liveSamples.length - 1];
+              const maxBps = Math.max(...liveSamples.flatMap((s) => [s.downloadBps, s.uploadBps]), 1);
+              const chartH = 56;
+              const w = 100 / (LIVE_MAX_SAMPLES - 1);
+              const toY = (v: number) => chartH - Math.round((v / maxBps) * chartH);
+
+              const dlPoints = liveSamples.map((s, i) => `${i * w},${toY(s.downloadBps)}`).join(" ");
+              const ulPoints = liveSamples.map((s, i) => `${i * w},${toY(s.uploadBps)}`).join(" ");
+
+              return (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-success/5 p-4">
+                      <div className="w-9 h-9 rounded-lg bg-success/15 flex items-center justify-center shrink-0">
+                        <ArrowDown className="h-4 w-4 text-success" />
+                      </div>
+                      <div>
+                        <p className="text-[9.5px] font-bold uppercase tracking-widest text-muted-foreground">Download</p>
+                        <p className="text-xl font-extrabold font-mono tabular-nums text-success leading-tight mt-0.5">
+                          {formatBps(last.downloadBps)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-primary/5 p-4">
+                      <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                        <ArrowUp className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-[9.5px] font-bold uppercase tracking-widest text-muted-foreground">Upload</p>
+                        <p className="text-xl font-extrabold font-mono tabular-nums text-primary leading-tight mt-0.5">
+                          {formatBps(last.uploadBps)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sparkline chart */}
+                  <div className="relative rounded-lg border border-border/40 bg-muted/20 overflow-hidden" style={{ height: chartH + 16 }}>
+                    <svg
+                      viewBox={`0 0 100 ${chartH}`}
+                      preserveAspectRatio="none"
+                      className="absolute inset-0 w-full h-full"
+                    >
+                      {/* Download area */}
+                      <polyline
+                        points={dlPoints}
+                        fill="none"
+                        stroke="var(--success)"
+                        strokeWidth="0.8"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      {/* Upload area */}
+                      <polyline
+                        points={ulPoints}
+                        fill="none"
+                        stroke="var(--primary)"
+                        strokeWidth="0.8"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    </svg>
+                    <div className="absolute bottom-1 right-2 flex items-center gap-3 text-[9px] text-muted-foreground">
+                      <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-success inline-block rounded" />DL</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-primary inline-block rounded" />UL</span>
+                      <span className="font-mono opacity-60">{new Date(last.timestamp).toLocaleTimeString("pt-BR")}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Traffic card */}
       <Card>
