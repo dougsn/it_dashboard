@@ -4,27 +4,12 @@ import { useEffect, useState } from "react";
 import { DeviceDetailDrawer } from "@/components/device-detail-drawer";
 import { Topbar } from "@/components/topbar";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  AlertCircle,
-  CheckCircle2,
-  Router,
-  HardDrive,
-  Camera,
-  Box,
-  Clock,
-  Wifi,
-  WifiOff,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Wifi, WifiOff } from "lucide-react";
+import { DEVICE_TYPE_ICON } from "@/lib/device-constants";
+import { formatDuration, timeAgo } from "@/lib/format";
+import { FilterChip } from "@/components/filter-chip";
 import type { DeviceType } from "@prisma/client";
 import type { Incident, PaginatedIncidentsResponse } from "@/app/api/incidents/route";
-
-const TYPE_ICON: Record<DeviceType, React.ElementType> = {
-  MIKROTIK: Router,
-  DVR: HardDrive,
-  CAMERA: Camera,
-  OTHER: Box,
-  UNIFI_AP: Wifi,
-};
 
 type Window = 24 | 168 | 720;
 const WINDOWS: { label: string; value: Window }[] = [
@@ -33,27 +18,6 @@ const WINDOWS: { label: string; value: Window }[] = [
   { label: "30d", value: 720 },
 ];
 
-function formatDuration(ms: number | null) {
-  if (ms == null) return null;
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}min`;
-  const h = Math.floor(m / 60);
-  const rem = m % 60;
-  return rem > 0 ? `${h}h ${rem}min` : `${h}h`;
-}
-
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60_000);
-  if (m < 1) return "agora";
-  if (m < 60) return `${m}min atrás`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h atrás`;
-  const d = Math.floor(h / 24);
-  return `${d}d atrás`;
-}
 
 function severityColor(durationMs: number | null, resolved: boolean) {
   if (!resolved) return "text-destructive border-destructive/30 bg-destructive/5";
@@ -64,34 +28,6 @@ function severityColor(durationMs: number | null, resolved: boolean) {
   return "text-destructive border-destructive/30 bg-destructive/5";
 }
 
-interface FilterChipProps {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  color?: "default" | "success" | "destructive";
-}
-
-function FilterChip({ active, onClick, children, color = "default" }: FilterChipProps) {
-  const activeClass =
-    color === "success"
-      ? "bg-success text-white border-success"
-      : color === "destructive"
-      ? "bg-destructive text-white border-destructive"
-      : "bg-primary text-primary-foreground border-primary";
-
-  return (
-    <button
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-medium border transition-all select-none whitespace-nowrap ${
-        active
-          ? activeClass
-          : "bg-background text-muted-foreground border-border hover:bg-muted hover:text-foreground"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
 
 function groupByDay(incidents: Incident[]) {
   const groups: Map<string, Incident[]> = new Map();
@@ -247,7 +183,7 @@ export default function IncidentsPage() {
                 {/* Incidents for this day */}
                 <div className="rounded-xl border bg-card overflow-hidden divide-y">
                   {items.map((inc) => {
-                    const TypeIcon = TYPE_ICON[inc.deviceType];
+                    const TypeIcon = DEVICE_TYPE_ICON[inc.deviceType];
                     const duration = formatDuration(inc.durationMs);
                     const color = severityColor(inc.durationMs, inc.resolved);
 
@@ -295,7 +231,7 @@ export default function IncidentsPage() {
 
                         {/* Right: duration + status */}
                         <div className="flex items-center gap-2 shrink-0">
-                          {duration && (
+                          {inc.durationMs != null && (
                             <span
                               className={`text-xs font-mono font-semibold px-2 py-0.5 rounded-full border ${color}`}
                             >

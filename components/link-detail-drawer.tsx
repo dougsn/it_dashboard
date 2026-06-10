@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Wifi, MapPin, History, Zap, X, AlertTriangle, ArrowDown, ArrowUp } from "lucide-react";
+import { formatBps, formatDuration } from "@/lib/format";
 
 type SegState = "online" | "offline" | "degraded" | "empty";
 
@@ -24,13 +25,6 @@ interface LinkData {
   mikrotikInterface: string | null;
 }
 
-function formatBps(bps: number | null): string {
-  if (bps == null) return "—";
-  if (bps >= 1_000_000_000) return `${(bps / 1_000_000_000).toFixed(2)} Gbps`;
-  if (bps >= 1_000_000)     return `${(bps / 1_000_000).toFixed(2)} Mbps`;
-  if (bps >= 1_000)         return `${(bps / 1_000).toFixed(0)} Kbps`;
-  return `${bps} bps`;
-}
 interface EventsResponse {
   link: LinkData; events: LinkEvent[]; lastBefore: LinkEvent | null; since: string;
 }
@@ -77,13 +71,6 @@ function calcOutages(events: LinkEvent[]) {
   return events.filter((e) => e.type === "DOWN").length;
 }
 
-function formatDuration(ms: number) {
-  if (ms < 60_000) return `${Math.floor(ms / 1000)}s`;
-  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}min`;
-  const h = Math.floor(ms / 3_600_000);
-  const m = Math.floor((ms % 3_600_000) / 60_000);
-  return m > 0 ? `${h}h ${m}min` : `${h}h`;
-}
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 

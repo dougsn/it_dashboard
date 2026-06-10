@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/status-badge";
 import { Copy, Check, Activity, Clock, AlertTriangle, ArrowDown, ArrowUp, MapPin, Play, Square, Loader2 } from "lucide-react";
 import { Topbar } from "@/components/topbar";
+import { formatBps, formatDuration } from "@/lib/format";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -114,21 +115,6 @@ function calcTotalDowntime(events: LinkEvent[], lastBefore: LinkEvent | null, si
   return downTime;
 }
 
-function formatDuration(ms: number) {
-  if (ms < 60_000) return `${Math.floor(ms / 1000)}s`;
-  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m`;
-  const h = Math.floor(ms / 3_600_000);
-  const m = Math.floor((ms % 3_600_000) / 60_000);
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}
-
-function formatBps(bps: number | null): string {
-  if (bps == null) return "—";
-  if (bps >= 1_000_000_000) return `${(bps / 1_000_000_000).toFixed(2)} Gbps`;
-  if (bps >= 1_000_000)     return `${(bps / 1_000_000).toFixed(2)} Mbps`;
-  if (bps >= 1_000)         return `${(bps / 1_000).toFixed(0)} Kbps`;
-  return `${bps} bps`;
-}
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);

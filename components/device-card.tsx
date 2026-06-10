@@ -4,26 +4,11 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { formatUptime, formatResponseTime, formatPercent } from "@/lib/format";
-import { MapPin, Router, HardDrive, Camera, Box, Wifi, Users } from "lucide-react";
-import type { Device, DeviceStatus, DeviceType } from "@prisma/client";
+import { DEVICE_TYPE_ICON, DEVICE_TYPE_LABEL } from "@/lib/device-constants";
+import { MapPin, Users } from "lucide-react";
+import type { Device, DeviceStatus } from "@prisma/client";
 
 type DeviceWithStatus = Device & { currentStatus: DeviceStatus | null };
-
-const TYPE_ICON: Record<DeviceType, React.ElementType> = {
-  MIKROTIK: Router,
-  DVR: HardDrive,
-  CAMERA: Camera,
-  OTHER: Box,
-  UNIFI_AP: Wifi,
-};
-
-const TYPE_LABEL: Record<DeviceType, string> = {
-  MIKROTIK: "Mikrotik",
-  DVR: "DVR",
-  CAMERA: "Câmera",
-  OTHER: "Outro",
-  UNIFI_AP: "UniFi AP",
-};
 
 function pingQuality(ms: number | null | undefined): "success" | "warning" | "destructive" | "muted" {
   if (ms == null) return "muted";
@@ -67,7 +52,7 @@ function MiniBar({ value, colorClass }: { value: number; colorClass: string }) {
 export function DeviceCard({ device }: { device: DeviceWithStatus }) {
   const status = device.currentStatus;
   const isOnline = status?.isOnline ?? false;
-  const TypeIcon = TYPE_ICON[device.type];
+  const TypeIcon = DEVICE_TYPE_ICON[device.type];
   const quality = pingQuality(status?.pingMs);
   const unifiClients = device.type === "UNIFI_AP"
     ? ((status?.unifiData as { totalClients?: number } | null)?.totalClients ?? null)
@@ -95,7 +80,7 @@ export function DeviceCard({ device }: { device: DeviceWithStatus }) {
               <p className="text-xs text-muted-foreground font-mono mt-0.5">{device.ip}</p>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-accent text-primary text-[10px] font-medium">
-                  {TYPE_LABEL[device.type]}
+                  {DEVICE_TYPE_LABEL[device.type]}
                 </span>
                 {device.location && (
                   <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">

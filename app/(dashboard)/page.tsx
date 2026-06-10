@@ -10,12 +10,15 @@ import { StatusBadge } from "@/components/status-badge";
 import { Topbar } from "@/components/topbar";
 import {
   RefreshCw, Plus, Wifi, WifiOff, Server, Network,
-  LayoutDashboard, Activity, AlertTriangle, Router,
-  HardDrive, Camera, Box, MapPin, AlertCircle,
+  LayoutDashboard, Activity, AlertTriangle, MapPin, AlertCircle,
   CheckCircle2, TrendingUp, ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { PingSparkline } from "@/components/ping-sparkline";
+import { DEVICE_TYPE_ICON, DEVICE_TYPE_ICON_BG, DEVICE_TYPE_LABEL } from "@/lib/device-constants";
+import { formatBps, timeAgo } from "@/lib/format";
+import { BandwidthCell } from "@/components/bandwidth-cell";
+import { FilterChip } from "@/components/filter-chip";
 import type { Device, DeviceStatus, DeviceType } from "@prisma/client";
 import type { HealthData } from "@/app/api/health/route";
 import type { Incident } from "@/app/api/incidents/route";
@@ -40,17 +43,7 @@ interface LinkItem {
 }
 
 const TYPE_LABELS: Record<DeviceType | "ALL", string> = {
-  ALL: "Todos", MIKROTIK: "Mikrotik", DVR: "DVR", CAMERA: "Câmera", OTHER: "Outro", UNIFI_AP: "UniFi AP",
-};
-const TYPE_ICON: Record<DeviceType, React.ElementType> = {
-  MIKROTIK: Router, DVR: HardDrive, CAMERA: Camera, OTHER: Box, UNIFI_AP: Wifi,
-};
-const TYPE_ICON_BG: Record<DeviceType, string> = {
-  MIKROTIK: "bg-primary/10 text-primary",
-  DVR:      "bg-warning/10 text-warning",
-  CAMERA:   "bg-destructive/10 text-destructive",
-  OTHER:    "bg-muted text-muted-foreground",
-  UNIFI_AP: "bg-sky-500/10 text-sky-500",
+  ALL: "Todos", ...DEVICE_TYPE_LABEL,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -119,20 +112,6 @@ function KpiCard({ label, value, suffix, icon: Icon, iconBg, iconColor, subtitle
   );
 }
 
-// ─── Filter chip ─────────────────────────────────────────────────────────────
-
-function FilterChip({ active, onClick, children, color = "default" }: {
-  active: boolean; onClick: () => void; children: React.ReactNode; color?: "default" | "success" | "destructive";
-}) {
-  const activeClass = color === "success" ? "bg-success text-white border-success" :
-    color === "destructive" ? "bg-destructive text-white border-destructive" :
-    "bg-primary text-primary-foreground border-primary";
-  return (
-    <button onClick={onClick} className={`inline-flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-medium border transition-all select-none whitespace-nowrap ${
-      active ? activeClass : "bg-background text-muted-foreground border-border hover:bg-muted hover:text-foreground"
-    }`}>{children}</button>
-  );
-}
 
 // ─── Uptime gauge ────────────────────────────────────────────────────────────
 
@@ -167,7 +146,7 @@ function ProblemRow({ device, offlineAt, sparkline, onClick }: {
   const status = device.currentStatus;
   const isOnline = status?.isOnline ?? false;
   const isInstavel = isOnline && (status?.pingMs ?? 0) > 150;
-  const TypeIcon = TYPE_ICON[device.type];
+  const TypeIcon = DEVICE_TYPE_ICON[device.type];
 
   const dotColor = isInstavel ? "bg-warning" : "bg-destructive";
   const descColor = isInstavel ? "text-warning" : "text-destructive";
@@ -231,39 +210,6 @@ function UptimeSegments({ segments }: { segments: SegmentState[] }) {
   );
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatBps(bps: number | null): string {
-  if (bps == null) return "—";
-  if (bps >= 1_000_000_000) return `${(bps / 1_000_000_000).toFixed(1)} Gbps`;
-  if (bps >= 1_000_000)     return `${(bps / 1_000_000).toFixed(1)} Mbps`;
-  if (bps >= 1_000)         return `${(bps / 1_000).toFixed(0)} Kbps`;
-  return `${bps} bps`;
-}
-
-function BandwidthCell({ current, contracted, color }: {
-  current: number | null;
-  contracted: number | null;
-  color: "success" | "primary";
-}) {
-  if (current == null) return <span className="text-muted-foreground/50 text-xs font-normal">sem dados</span>;
-  const pct = contracted && contracted > 0 ? Math.min((current / contracted) * 100, 100) : null;
-  const barColor = pct == null ? "" : pct >= 90 ? "bg-destructive" : pct >= 70 ? "bg-warning" : color === "success" ? "bg-success" : "bg-primary";
-  const textColor = color === "success" ? "text-success" : "text-primary";
-  return (
-    <div className="inline-flex flex-col items-end gap-0.5 min-w-18">
-      <span className={`font-mono text-xs font-semibold ${textColor}`}>{formatBps(current)}</span>
-      {contracted != null && (
-        <>
-          <span className="text-[10px] text-muted-foreground font-mono">/ {formatBps(contracted)}</span>
-          <div className="w-full h-1 rounded-full bg-muted overflow-hidden">
-            <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 
 // ─── Device overview card ─────────────────────────────────────────────────────
 
@@ -272,7 +218,7 @@ function DeviceOverviewCard({ device, sparkline, onClick }: { device: DeviceWith
   const isOnline = status?.isOnline ?? false;
   const ping = status?.pingMs;
   const isInstavel = isOnline && (ping ?? 0) > 150;
-  const TypeIcon = TYPE_ICON[device.type];
+  const TypeIcon = DEVICE_TYPE_ICON[device.type];
 
 
   return (
@@ -284,7 +230,7 @@ function DeviceOverviewCard({ device, sparkline, onClick }: { device: DeviceWith
           {/* Header */}
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-start gap-2.5">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${TYPE_ICON_BG[device.type]}`}>
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${DEVICE_TYPE_ICON_BG[device.type]}`}>
                 <TypeIcon className="h-4 w-4" />
               </div>
               <div className="min-w-0">
@@ -375,21 +321,11 @@ function kindLabel(ev: TimelineEvent): string {
 }
 
 const ENTITY_ICON: Record<TimelineEvent["entityType"], React.ElementType> = {
-  MIKROTIK: Router, DVR: HardDrive, CAMERA: Camera, OTHER: Box, UNIFI_AP: Wifi, LINK: Network,
+  ...DEVICE_TYPE_ICON, LINK: Network,
 };
 const ENTITY_LABEL: Record<TimelineEvent["entityType"], string> = {
-  MIKROTIK: "Mikrotik", DVR: "DVR", CAMERA: "Câmera", OTHER: "Outro", UNIFI_AP: "UniFi AP", LINK: "Link",
+  ...DEVICE_TYPE_LABEL, LINK: "Link",
 };
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60_000);
-  if (m < 1) return "agora";
-  if (m < 60) return `há ${m}min`;
-  const h = Math.floor(m / 60);
-  const rem = m % 60;
-  return `há ${h}h${rem > 0 ? String(rem).padStart(2, "0") : ""}`;
-}
 
 function IncidentTimelineRow({ ev }: { ev: TimelineEvent }) {
   const EIcon = ENTITY_ICON[ev.entityType];

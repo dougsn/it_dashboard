@@ -8,28 +8,12 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatUptime } from "@/lib/format";
-import {
-  Router, HardDrive, Camera, Box, MapPin,
-  History, Zap, X, Wifi,
-} from "lucide-react";
+import { DEVICE_TYPE_ICON, DEVICE_TYPE_ICON_BG, DEVICE_TYPE_LABEL } from "@/lib/device-constants";
+import { MapPin, History, Zap, X } from "lucide-react";
 import { PingSparkline } from "@/components/ping-sparkline";
-import type { Device, DeviceStatus, StatusHistory, DeviceType } from "@prisma/client";
+import type { Device, DeviceStatus, StatusHistory } from "@prisma/client";
 
 type DeviceWithStatus = Device & { currentStatus: DeviceStatus | null };
-
-const TYPE_ICON: Record<DeviceType, React.ElementType> = {
-  MIKROTIK: Router, DVR: HardDrive, CAMERA: Camera, OTHER: Box, UNIFI_AP: Wifi,
-};
-const TYPE_ICON_BG: Record<DeviceType, string> = {
-  MIKROTIK: "bg-primary/10 text-primary",
-  DVR:      "bg-warning/10 text-warning",
-  CAMERA:   "bg-destructive/10 text-destructive",
-  OTHER:    "bg-muted text-muted-foreground",
-  UNIFI_AP: "bg-sky-500/10 text-sky-500",
-};
-const TYPE_LABEL: Record<DeviceType, string> = {
-  MIKROTIK: "Mikrotik", DVR: "DVR", CAMERA: "Câmera", OTHER: "Outro", UNIFI_AP: "UniFi AP",
-};
 
 // ─── Uptime segments ─────────────────────────────────────────────────────────
 
@@ -149,7 +133,7 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
     : null;
 
   const status = device?.currentStatus;
-  const TypeIcon = device ? TYPE_ICON[device.type] : Box;
+  const TypeIcon = device ? DEVICE_TYPE_ICON[device.type] : DEVICE_TYPE_ICON.OTHER;
 
   const timeLabels = history.map((h) =>
     new Date(h.timestamp).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
@@ -184,7 +168,7 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
           ) : (
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3 min-w-0">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${TYPE_ICON_BG[device.type]}`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${DEVICE_TYPE_ICON_BG[device.type]}`}>
                   <TypeIcon className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
@@ -367,7 +351,7 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
               </div>
             ) : device ? (
               <div>
-                <InfoRow label="Tipo"              value={TYPE_LABEL[device.type]} />
+                <InfoRow label="Tipo"              value={DEVICE_TYPE_LABEL[device.type]} />
                 <InfoRow label="Endereço IP"       value={device.ip} />
                 {status?.uptime != null && (
                   <InfoRow label="Uptime"          value={formatUptime(status.uptime)} />
