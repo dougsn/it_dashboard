@@ -84,7 +84,11 @@ describe("Input validation security", () => {
       location: null, notes: null, pingEnabled: true, httpEnabled: false,
       httpPort: null, httpPath: "/", snmpEnabled: false, snmpCommunity: "public",
       snmpPort: 161, routerosEnabled: false, routerosUser: null, routerosPass: null,
-      routerosPort: 8728, checkInterval: 60, createdAt: new Date(), updatedAt: new Date(),
+      routerosUserEnc: null, routerosPassEnc: null,
+      routerosPort: 8728, unifiEnabled: false, unifiAuthMethod: "apikey",
+      unifiApiKeyEnc: null, unifiUserEnc: null, unifiPassEnc: null,
+      unifiPort: 443, unifiSite: "default", unifiTlsVerify: false, unifiControllerIp: null,
+      checkInterval: 60, createdAt: new Date(), updatedAt: new Date(),
     });
 
     const req = new NextRequest("http://localhost/api/devices", {

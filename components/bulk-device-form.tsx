@@ -18,13 +18,31 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertCircle, CheckCircle2, Layers } from "lucide-react";
+import { AlertCircle, CheckCircle, CheckCircle2, Eye, EyeOff, Layers, Loader2, XCircle } from "lucide-react";
+
+function PasswordInput({ className, ...props }: React.ComponentProps<"input">) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <Input {...props} type={show ? "text" : "password"} className={`pr-9 ${className ?? ""}`} />
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={() => setShow((v) => !v)}
+        className="absolute inset-y-0 right-0 flex items-center px-2.5 text-muted-foreground hover:text-foreground transition-colors"
+        aria-label={show ? "Ocultar senha" : "Mostrar senha"}
+      >
+        {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+      </button>
+    </div>
+  );
+}
 
 const schema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   ipStart: z.string().min(1, "IP inicial é obrigatório"),
   ipEnd: z.string().min(1, "IP final é obrigatório"),
-  type: z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER"]),
+  type: z.enum(["MIKROTIK", "UNIFI_AP", "DVR", "CAMERA", "OTHER"]),
   location: z.string().optional(),
   notes: z.string().optional(),
   pingEnabled: z.boolean(),
@@ -38,6 +56,16 @@ const schema = z.object({
   routerosUser: z.string().optional().nullable(),
   routerosPass: z.string().optional().nullable(),
   routerosPort: z.number(),
+  unifiEnabled: z.boolean(),
+  unifiAuthMethod: z.enum(["apikey", "userpass"]),
+  unifiApiKey: z.string().optional().nullable(),
+  unifiUser: z.string().optional().nullable(),
+  unifiPass: z.string().optional().nullable(),
+  unifiPort: z.number(),
+  unifiSite: z.string(),
+  unifiTlsVerify: z.boolean(),
+  unifiMode: z.enum(["standalone", "controller"]),
+  unifiControllerIp: z.string().optional().nullable(),
   checkInterval: z.number().min(10).max(3600),
 });
 
@@ -70,6 +98,7 @@ function expandRange(start: string, end: string): string[] | null {
 export function BulkDeviceForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [unifiTest, setUnifiTest] = useState<{ status: "idle" | "testing" | "ok" | "error"; message?: string }>({ status: "idle" });
 
   const {
     register,
@@ -89,15 +118,24 @@ export function BulkDeviceForm() {
       snmpPort: 161,
       routerosEnabled: false,
       routerosPort: 8728,
+      unifiEnabled: false,
+      unifiAuthMethod: "apikey",
+      unifiPort: 443,
+      unifiSite: "default",
+      unifiTlsVerify: false,
+      unifiMode: "standalone",
       checkInterval: 60,
     },
   });
 
-  const ipStart = watch("ipStart") ?? "";
-  const ipEnd = watch("ipEnd") ?? "";
-  const httpEnabled = watch("httpEnabled");
-  const snmpEnabled = watch("snmpEnabled");
+  const ipStart        = watch("ipStart") ?? "";
+  const ipEnd          = watch("ipEnd") ?? "";
+  const httpEnabled    = watch("httpEnabled");
+  const snmpEnabled    = watch("snmpEnabled");
   const routerosEnabled = watch("routerosEnabled");
+  const unifiEnabled   = watch("unifiEnabled");
+  const unifiAuthMethod = watch("unifiAuthMethod");
+  const unifiMode      = watch("unifiMode");
 
   const preview = useCallback(() => {
     if (!ipStart || !ipEnd) return null;
@@ -105,6 +143,45 @@ export function BulkDeviceForm() {
   }, [ipStart, ipEnd]);
 
   const ips = preview();
+  async function testUnifiConnection() {
+    const values = watch();
+    const controllerIp =
+      values.unifiMode === "controller" && values.unifiControllerIp
+        ? values.unifiControllerIp
+        : null;
+
+    if (!controllerIp) {
+      setUnifiTest({ status: "error", message: "Informe o IP do controlador no modo Cloud Key / Controller" });
+      return;
+    }
+
+    setUnifiTest({ status: "testing" });
+    try {
+      const res = await fetch("/api/devices/test-unifi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          controllerIp,
+          port: values.unifiPort,
+          site: values.unifiSite,
+          tlsVerify: values.unifiTlsVerify,
+          authMethod: values.unifiAuthMethod,
+          apiKey: values.unifiApiKey || undefined,
+          unifiUser: values.unifiUser || undefined,
+          unifiPass: values.unifiPass || undefined,
+        }),
+      });
+      const json = await res.json() as { ok?: boolean; message?: string; error?: string };
+      if (res.ok && json.ok) {
+        setUnifiTest({ status: "ok", message: json.message });
+      } else {
+        setUnifiTest({ status: "error", message: json.error ?? "Falha no teste" });
+      }
+    } catch {
+      setUnifiTest({ status: "error", message: "Erro de rede ao testar conexão" });
+    }
+  }
+
   const rangeError = ipStart && ipEnd && ips === null
     ? (ipToInt(ipStart) !== null && ipToInt(ipEnd) !== null && (ipToInt(ipStart)! > ipToInt(ipEnd)!)
       ? "IP inicial maior que o final"
@@ -118,10 +195,21 @@ export function BulkDeviceForm() {
     }
     setLoading(true);
     try {
+      const { unifiMode: _mode, ...rest } = data;
+      const payload = {
+        ...rest,
+        unifiControllerIp:
+          data.unifiMode === "controller" && data.unifiControllerIp
+            ? data.unifiControllerIp
+            : null,
+        unifiApiKey: data.unifiAuthMethod === "apikey" ? (data.unifiApiKey || undefined) : "",
+        unifiUser:   data.unifiAuthMethod === "userpass" ? (data.unifiUser || undefined) : "",
+        unifiPass:   data.unifiAuthMethod === "userpass" ? (data.unifiPass || undefined) : "",
+      };
       const res = await fetch("/api/devices/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Falha ao criar dispositivos");
@@ -213,6 +301,7 @@ export function BulkDeviceForm() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="MIKROTIK">Mikrotik</SelectItem>
+                  <SelectItem value="UNIFI_AP">UniFi AP</SelectItem>
                   <SelectItem value="DVR">DVR</SelectItem>
                   <SelectItem value="CAMERA">Câmera</SelectItem>
                   <SelectItem value="OTHER">Outro</SelectItem>
@@ -338,7 +427,7 @@ export function BulkDeviceForm() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Senha</Label>
-                  <Input type="password" {...register("routerosPass")} />
+                  <PasswordInput {...register("routerosPass")} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Porta API</Label>
@@ -347,6 +436,174 @@ export function BulkDeviceForm() {
                     placeholder="8728"
                     {...register("routerosPort", { valueAsNumber: true })}
                   />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* UniFi */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-sm">UniFi Controller API</p>
+                <p className="text-xs text-muted-foreground">SSIDs, clientes e tráfego de APs UniFi</p>
+              </div>
+              <Switch
+                checked={unifiEnabled}
+                onCheckedChange={(v) => setValue("unifiEnabled", v)}
+              />
+            </div>
+            {unifiEnabled && (
+              <div className="space-y-3 pl-4 border-l-2 border-muted">
+                {/* Auth method */}
+                <div className="space-y-2">
+                  <Label className="text-xs">Método de autenticação</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["apikey", "userpass"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setValue("unifiAuthMethod", m)}
+                        className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
+                          unifiAuthMethod === m
+                            ? "border-primary bg-primary/5 text-primary font-semibold"
+                            : "border-border text-muted-foreground hover:border-muted-foreground"
+                        }`}
+                      >
+                        <p className="font-medium">{m === "apikey" ? "Chave de API" : "Usuário e senha"}</p>
+                        <p className="text-[10px] opacity-70 mt-0.5">
+                          {m === "apikey"
+                            ? "Gerada em Settings → Integrations"
+                            : "Login local do controlador (RSSI + SSID)"}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* API Key */}
+                {unifiAuthMethod === "apikey" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Chave de API (X-API-KEY)</Label>
+                    <PasswordInput
+                      placeholder="Cole a chave gerada em Settings → Control Plane → Integrations"
+                      {...register("unifiApiKey")}
+                      className="font-mono text-xs"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Gere a chave em: UniFi Network → Settings → Control Plane → Integrations
+                    </p>
+                  </div>
+                )}
+
+                {/* User + Password */}
+                {unifiAuthMethod === "userpass" && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Usuário</Label>
+                      <Input placeholder="admin" {...register("unifiUser")} autoComplete="off" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Senha</Label>
+                      <PasswordInput {...register("unifiPass")} />
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Site</Label>
+                    <Input placeholder="default" {...register("unifiSite")} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Porta <span className="text-muted-foreground font-normal">(443 para UniFi OS)</span></Label>
+                    <Input
+                      type="number"
+                      placeholder="443"
+                      {...register("unifiPort", { valueAsNumber: true })}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={watch("unifiTlsVerify")}
+                    onCheckedChange={(v) => setValue("unifiTlsVerify", v)}
+                  />
+                  <Label className="text-xs">Verificar certificado TLS</Label>
+                </div>
+
+                {/* Modo de conexão */}
+                <div className="space-y-2">
+                  <Label className="text-xs">Modo de conexão</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["standalone", "controller"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setValue("unifiMode", mode)}
+                        className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
+                          unifiMode === mode
+                            ? "border-primary bg-primary/5 text-primary font-semibold"
+                            : "border-border text-muted-foreground hover:border-muted-foreground"
+                        }`}
+                      >
+                        <p className="font-medium">
+                          {mode === "standalone" ? "AP direto / UDM" : "Cloud Key / Controller"}
+                        </p>
+                        <p className="text-[10px] opacity-70 mt-0.5">
+                          {mode === "standalone"
+                            ? "O IP do dispositivo é o controlador"
+                            : "Controlador em IP separado"}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {unifiMode === "controller" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">IP do controlador (Cloud Key)</Label>
+                    <Input
+                      placeholder="192.168.1.10"
+                      className="font-mono"
+                      {...register("unifiControllerIp")}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      O IP acima identifica cada AP; o controlador é acessado neste endereço.
+                    </p>
+                  </div>
+                )}
+
+                {/* Testar conexão */}
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={unifiTest.status === "testing"}
+                    onClick={testUnifiConnection}
+                    className="inline-flex items-center gap-2 h-8 px-3 rounded-lg border border-border bg-background text-xs font-medium hover:bg-muted disabled:opacity-50 transition-colors"
+                  >
+                    {unifiTest.status === "testing" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <CheckCircle className="h-3.5 w-3.5" />
+                    )}
+                    {unifiTest.status === "testing" ? "Testando..." : "Testar conexão"}
+                  </button>
+                  {unifiTest.status === "ok" && (
+                    <div className="flex items-start gap-2 rounded-md bg-success/10 border border-success/30 px-3 py-2 text-xs text-success">
+                      <CheckCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span>{unifiTest.message}</span>
+                    </div>
+                  )}
+                  {unifiTest.status === "error" && (
+                    <div className="flex items-start gap-2 rounded-md bg-destructive/5 border border-destructive/30 px-3 py-2 text-xs text-destructive">
+                      <XCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span>{unifiTest.message}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

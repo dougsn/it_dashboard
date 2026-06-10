@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { ipStart, ipEnd, name, routerosUser, routerosPass, ...config } = parsed.data;
+  const { ipStart, ipEnd, name, routerosUser, routerosPass, unifiApiKey, unifiUser, unifiPass, ...config } = parsed.data;
 
   const startInt = ipToInt(ipStart);
   const endInt = ipToInt(ipEnd);
@@ -60,6 +60,9 @@ export async function POST(req: NextRequest) {
       name: `${name} ${ip.split(".").pop()}`,
       routerosUserEnc: routerosUser ? encrypt(routerosUser) : null,
       routerosPassEnc: routerosPass ? encrypt(routerosPass) : null,
+      unifiApiKeyEnc:  unifiApiKey  ? encrypt(unifiApiKey)  : null,
+      unifiUserEnc:    unifiUser    ? encrypt(unifiUser)    : null,
+      unifiPassEnc:    unifiPass    ? encrypt(unifiPass)    : null,
     })),
     skipDuplicates: true,
   });

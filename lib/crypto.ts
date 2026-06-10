@@ -45,3 +45,19 @@ export function resolveRouterosCredentials(device: {
   if (!user || !pass) return null;
   return { user, pass };
 }
+
+export function resolveUnifiApiKey(device: {
+  unifiApiKeyEnc: string | null;
+}): string | null {
+  return device.unifiApiKeyEnc ? decrypt(device.unifiApiKeyEnc) : null;
+}
+
+export function resolveUnifiCredentials(device: {
+  unifiUserEnc: string | null;
+  unifiPassEnc: string | null;
+}): { username: string; password: string } | null {
+  const username = device.unifiUserEnc ? decrypt(device.unifiUserEnc) : null;
+  const password = device.unifiPassEnc ? decrypt(device.unifiPassEnc) : null;
+  if (!username || !password) return null;
+  return { username, password };
+}

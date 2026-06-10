@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatUptime } from "@/lib/format";
 import {
   Router, HardDrive, Camera, Box, MapPin,
-  History, Zap, X,
+  History, Zap, X, Wifi,
 } from "lucide-react";
 import { PingSparkline } from "@/components/ping-sparkline";
 import type { Device, DeviceStatus, StatusHistory, DeviceType } from "@prisma/client";
@@ -18,16 +18,17 @@ import type { Device, DeviceStatus, StatusHistory, DeviceType } from "@prisma/cl
 type DeviceWithStatus = Device & { currentStatus: DeviceStatus | null };
 
 const TYPE_ICON: Record<DeviceType, React.ElementType> = {
-  MIKROTIK: Router, DVR: HardDrive, CAMERA: Camera, OTHER: Box,
+  MIKROTIK: Router, DVR: HardDrive, CAMERA: Camera, OTHER: Box, UNIFI_AP: Wifi,
 };
 const TYPE_ICON_BG: Record<DeviceType, string> = {
   MIKROTIK: "bg-primary/10 text-primary",
   DVR:      "bg-warning/10 text-warning",
   CAMERA:   "bg-destructive/10 text-destructive",
   OTHER:    "bg-muted text-muted-foreground",
+  UNIFI_AP: "bg-sky-500/10 text-sky-500",
 };
 const TYPE_LABEL: Record<DeviceType, string> = {
-  MIKROTIK: "Mikrotik", DVR: "DVR", CAMERA: "Câmera", OTHER: "Outro",
+  MIKROTIK: "Mikrotik", DVR: "DVR", CAMERA: "Câmera", OTHER: "Outro", UNIFI_AP: "UniFi AP",
 };
 
 // ─── Uptime segments ─────────────────────────────────────────────────────────
