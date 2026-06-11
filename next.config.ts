@@ -11,10 +11,11 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
   {
     key: "Content-Security-Policy",
-    // SEC-020: removido 'unsafe-eval' — Next.js 14 + Recharts não precisam dele em runtime
+    // SEC-020: 'unsafe-eval' mantido apenas em dev (React exige para hot reload e
+    // reconstrução de callstacks). Em produção é removido.
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data:",
       "font-src 'self'",
