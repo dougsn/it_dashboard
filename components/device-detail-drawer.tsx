@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
   Sheet,
@@ -23,8 +23,7 @@ const SEG_COLOR: Record<Seg, string> = {
   online: "bg-success", offline: "bg-destructive", degraded: "bg-warning", empty: "bg-muted/60",
 };
 
-function buildSegments(history: StatusHistory[]): Seg[] {
-  const now = Date.now();
+function buildSegments(history: StatusHistory[], now: number): Seg[] {
   return Array.from({ length: 48 }, (_, i) => {
     const segEnd = now - i * 1_800_000;          // 30-min slots
     const segStart = segEnd - 1_800_000;
@@ -66,11 +65,11 @@ function MetricTile({ label, value, unit, loading }: {
 
 // ─── Info row ────────────────────────────────────────────────────────────────
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value, suppressHydration }: { label: string; value: string; suppressHydration?: boolean }) {
   return (
     <div className="flex items-center justify-between py-2.5 border-b border-border/60 last:border-0">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-semibold text-foreground text-right">{value}</span>
+      <span className="text-sm font-semibold text-foreground text-right" suppressHydrationWarning={suppressHydration}>{value}</span>
     </div>
   );
 }
@@ -96,6 +95,7 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [hours, setHours] = useState<HourOption>(24);
+  const [now, setNow] = useState(0); // 0 on SSR, set after mount to avoid hydration mismatch
 
   const fetchData = useCallback(async (id: string, h: number) => {
     setLoading(true);
@@ -106,6 +106,10 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
     setDevice(dev);
     setHistory(Array.isArray(hist) ? hist : []);
     setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    setNow(Date.now());
   }, []);
 
   useEffect(() => {
@@ -143,7 +147,7 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
   const cpuSparkline    = history.map((h) => h.cpuLoad ?? null);
   const memorySparkline = history.map((h) => h.memoryUsed ?? null);
 
-  const segments = buildSegments(history);
+  const segments = useMemo(() => buildSegments(history, now), [history, now]);
 
   return (
     <Sheet open={deviceId !== null} onOpenChange={(open) => !open && onClose()}>
@@ -363,6 +367,7 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
                   <InfoRow
                     label="Última verificação"
                     value={new Date(status.checkedAt).toLocaleTimeString("pt-BR")}
+                    suppressHydration
                   />
                 )}
               </div>

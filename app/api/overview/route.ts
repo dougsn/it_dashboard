@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/with-auth";
+import { requireAuth } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 
 export type SegmentState = "online" | "offline" | "degraded" | "empty";
@@ -9,7 +9,9 @@ export interface OverviewData {
   linkSegments: Record<string, SegmentState[]>;
 }
 
-export const GET = withAuth(async () => {
+export async function GET() {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const now = Date.now();
   const since24h = new Date(now - 24 * 3_600_000);
   const since6h  = new Date(now - 6  * 3_600_000);
@@ -109,4 +111,4 @@ export const GET = withAuth(async () => {
   }
 
   return NextResponse.json({ sparklines, linkSegments } satisfies OverviewData);
-});
+}

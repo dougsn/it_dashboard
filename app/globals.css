@@ -221,3 +221,11 @@
   opacity: 0.3;
   animation: ping-dot 1.8s ease-out infinite;
 }
+
+/* Print / PDF export */
+@media print {
+  .no-print { display: none !important; }
+  .report-content { padding: 0 !important; }
+  body { background: white !important; }
+  @page { margin: 20mm 15mm; size: A4; }
+}

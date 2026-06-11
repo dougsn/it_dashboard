@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/lib/with-auth";
+import { requireAuth } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { deviceConfigSchema } from "@/lib/schemas/device";
 import { encrypt } from "@/lib/crypto";
@@ -9,10 +9,12 @@ import { notFoundOnP2025 } from "@/lib/prisma-error";
 
 const updateSchema = deviceConfigSchema.partial();
 
-export const GET = withAuth(async (
+export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) => {
+) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const { id } = await params;
   const device = await db.device.findUnique({
     where: { id },
@@ -22,12 +24,14 @@ export const GET = withAuth(async (
   if (!device) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return NextResponse.json(sanitizeDevice(device));
-});
+}
 
-export const PUT = withAuth(async (
+export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) => {
+) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const { id } = await params;
   const body = await parseAndValidate(req, updateSchema);
   if (!body.ok) return body.response;
@@ -66,12 +70,14 @@ export const PUT = withAuth(async (
   } catch (err) {
     return notFoundOnP2025(err) ?? (() => { throw err; })();
   }
-});
+}
 
-export const DELETE = withAuth(async (
+export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) => {
+) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const { id } = await params;
   try {
     await db.device.delete({ where: { id } });
@@ -79,4 +85,4 @@ export const DELETE = withAuth(async (
   } catch (err) {
     return notFoundOnP2025(err) ?? (() => { throw err; })();
   }
-});
+}

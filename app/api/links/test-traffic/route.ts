@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { withAuth } from "@/lib/with-auth";
+import { requireAuth } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { checkLinkTraffic } from "@/worker/monitors/link-traffic";
 import { resolveRouterosCredentials } from "@/lib/crypto";
@@ -11,7 +11,9 @@ const schema = z.object({
   mikrotikInterface: z.string().min(1),
 });
 
-export const POST = withAuth(async (req: Request) => {
+export async function POST(req: Request) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const raw = await parseBody(req);
   if (!raw.ok) return raw.response;
   const parsed = schema.safeParse(raw.data);
@@ -57,4 +59,4 @@ export const POST = withAuth(async (req: Request) => {
 
     return NextResponse.json({ error: message }, { status: 422 });
   }
-});
+}

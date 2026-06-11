@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { withAuth } from "@/lib/with-auth";
+import { requireAuth } from "@/lib/with-auth";
 
-export const GET = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const { id } = await params;
   const { searchParams } = new URL(req.url);
   const hours = Math.min(parseInt(searchParams.get("hours") ?? "") || 24, 720);
@@ -25,4 +27,4 @@ export const GET = withAuth(async (req: Request, { params }: { params: Promise<{
   });
 
   return NextResponse.json({ link, events, lastBefore: lastBefore ?? null, since });
-});
+}

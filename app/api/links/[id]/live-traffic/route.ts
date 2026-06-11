@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/with-auth";
+import { requireAuth } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { resolveRouterosCredentials } from "@/lib/crypto";
 import { checkLinkTraffic } from "@/worker/monitors/link-traffic";
 
-export const GET = withAuth(async (
+export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
-) => {
+) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const { id } = await params;
   const link = await db.link.findUnique({
     where: { id },
@@ -48,4 +50,4 @@ export const GET = withAuth(async (
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: `Falha ao medir tráfego: ${msg}` }, { status: 422 });
   }
-});
+}

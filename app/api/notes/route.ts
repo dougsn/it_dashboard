@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/lib/with-auth";
+import { requireAuth } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { parseAndValidate } from "@/lib/parse-body";
@@ -13,7 +13,9 @@ const noteSchema = z.object({
   deviceId: z.string().optional().nullable(),
 });
 
-export const GET = withAuth(async () => {
+export async function GET() {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const notes = await db.note.findMany({
     include: { device: { select: { id: true, name: true, ip: true } } },
     orderBy: [
@@ -23,9 +25,11 @@ export const GET = withAuth(async () => {
   });
 
   return NextResponse.json(notes);
-});
+}
 
-export const POST = withAuth(async (req: NextRequest) => {
+export async function POST(req: NextRequest) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const body = await parseAndValidate(req, noteSchema);
   if (!body.ok) return body.response;
 
@@ -35,4 +39,4 @@ export const POST = withAuth(async (req: NextRequest) => {
   });
 
   return NextResponse.json(note, { status: 201 });
-});
+}

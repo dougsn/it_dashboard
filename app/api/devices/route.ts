@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/lib/with-auth";
+import { requireAuth } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { deviceConfigSchema } from "@/lib/schemas/device";
@@ -9,7 +9,9 @@ import { sanitizeDevice } from "@/lib/device-utils";
 
 const deviceTypeSchema = z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER", "UNIFI_AP"]);
 
-export const GET = withAuth(async (req: NextRequest) => {
+export async function GET(req: NextRequest) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const { searchParams } = new URL(req.url);
   const rawType = searchParams.get("type");
 
@@ -27,9 +29,11 @@ export const GET = withAuth(async (req: NextRequest) => {
   });
 
   return NextResponse.json(devices.map(sanitizeDevice));
-});
+}
 
-export const POST = withAuth(async (req: NextRequest) => {
+export async function POST(req: NextRequest) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const body = await parseAndValidate(req, deviceConfigSchema);
   if (!body.ok) return body.response;
 
@@ -47,4 +51,4 @@ export const POST = withAuth(async (req: NextRequest) => {
   });
 
   return NextResponse.json(sanitizeDevice(device), { status: 201 });
-});
+}

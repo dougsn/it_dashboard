@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/with-auth";
+import { requireAuth } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import type { DeviceType } from "@prisma/client";
 
@@ -22,7 +22,9 @@ export interface PaginatedIncidentsResponse {
   hasMore: boolean;
 }
 
-export const GET = withAuth(async (req: Request) => {
+export async function GET(req: Request) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const { searchParams } = new URL(req.url);
   const hours = Math.min(parseInt(searchParams.get("hours") ?? "") || 168, 720);
   const page  = Math.max(1, parseInt(searchParams.get("page")  ?? "") || 1);
@@ -107,4 +109,4 @@ export const GET = withAuth(async (req: Request) => {
     limit,
     hasMore: start + limit < total,
   } satisfies PaginatedIncidentsResponse);
-});
+}

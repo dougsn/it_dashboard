@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/lib/with-auth";
+import { requireAuth } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { bulkDeviceSchema } from "@/lib/schemas/device";
 import { encrypt } from "@/lib/crypto";
@@ -20,7 +20,9 @@ function intToIp(n: number): string {
   ].join(".");
 }
 
-export const POST = withAuth(async (req: NextRequest) => {
+export async function POST(req: NextRequest) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const body = await parseAndValidate(req, bulkDeviceSchema);
   if (!body.ok) return body.response;
 
@@ -61,4 +63,4 @@ export const POST = withAuth(async (req: NextRequest) => {
   });
 
   return NextResponse.json({ created: devices.count, ips }, { status: 201 });
-});
+}

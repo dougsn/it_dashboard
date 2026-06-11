@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/lib/with-auth";
+import { requireAuth } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 
-export const GET = withAuth(async (
+export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ deviceId: string }> }
-) => {
+) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const { deviceId } = await params;
   const { searchParams } = new URL(req.url);
   const hours = Math.min(parseInt(searchParams.get("hours") ?? "") || 24, 168);
@@ -19,4 +21,4 @@ export const GET = withAuth(async (
   });
 
   return NextResponse.json(history);
-});
+}

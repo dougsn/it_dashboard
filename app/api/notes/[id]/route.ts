@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/lib/with-auth";
+import { requireAuth } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { parseAndValidate } from "@/lib/parse-body";
@@ -15,10 +15,12 @@ const updateNoteSchema = z.object({
   resolvedAt: z.string().datetime().optional().nullable(),
 });
 
-export const GET = withAuth(async (
+export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) => {
+) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const { id } = await params;
   const note = await db.note.findUnique({
     where: { id },
@@ -28,12 +30,14 @@ export const GET = withAuth(async (
   if (!note) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return NextResponse.json(note);
-});
+}
 
-export const PUT = withAuth(async (
+export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) => {
+) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const { id } = await params;
   const body = await parseAndValidate(req, updateNoteSchema);
   if (!body.ok) return body.response;
@@ -59,12 +63,14 @@ export const PUT = withAuth(async (
   } catch (err) {
     return notFoundOnP2025(err) ?? (() => { throw err; })();
   }
-});
+}
 
-export const DELETE = withAuth(async (
+export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) => {
+) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const { id } = await params;
   try {
     await db.note.delete({ where: { id } });
@@ -72,4 +78,4 @@ export const DELETE = withAuth(async (
   } catch (err) {
     return notFoundOnP2025(err) ?? (() => { throw err; })();
   }
-});
+}

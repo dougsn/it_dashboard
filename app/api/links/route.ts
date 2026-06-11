@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { z } from "zod";
-import { withAuth } from "@/lib/with-auth";
+import { requireAuth } from "@/lib/with-auth";
 import { generateWebhookToken } from "@/lib/webhook";
 import { parseAndValidate } from "@/lib/parse-body";
 
@@ -15,7 +15,9 @@ const createSchema = z.object({
   contractedUploadBps: z.number().int().positive().optional().nullable(),
 });
 
-export const GET = withAuth(async () => {
+export async function GET() {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const links = await db.link.findMany({
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { events: true } } },
@@ -27,12 +29,14 @@ export const GET = withAuth(async () => {
   }));
 
   return NextResponse.json(withTokens);
-});
+}
 
-export const POST = withAuth(async (req: Request) => {
+export async function POST(req: Request) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const body = await parseAndValidate(req, createSchema);
   if (!body.ok) return body.response;
 
   const link = await db.link.create({ data: body.data });
   return NextResponse.json(link, { status: 201 });
-});
+}

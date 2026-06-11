@@ -27,7 +27,7 @@ import { Topbar } from "@/components/topbar";
 import {
   Pencil, Trash2, Cpu, MemoryStick, Clock, Wifi, Globe, Activity,
   Users, Radio, AlertTriangle, ArrowDownToLine, ArrowUpFromLine,
-  ChevronDown, ChevronUp, ArrowUpDown,
+  ChevronDown, ChevronUp, ArrowUpDown, FileText,
 } from "lucide-react";
 
 import { toast } from "sonner";
@@ -200,6 +200,10 @@ export default function DeviceDetailPage({
         subtitle={`${device.ip}${device.location ? ` · ${device.location}` : ''}`}
         back="/devices"
       >
+        <Link href={`/reports?device=${id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <FileText className="h-4 w-4 mr-1" />
+          Relatório
+        </Link>
         <Link href={`/devices/${id}/edit`} className={buttonVariants({ variant: "outline", size: "sm" })}>
           <Pencil className="h-4 w-4 mr-1" />
           Editar

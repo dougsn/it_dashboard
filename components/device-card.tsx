@@ -167,7 +167,7 @@ export function DeviceCard({ device }: { device: DeviceWithStatus }) {
 
               {/* Checked at */}
               {status.checkedAt && (
-                <p className="text-[10px] text-muted-foreground/60 pt-0.5">
+                <p className="text-[10px] text-muted-foreground/60 pt-0.5" suppressHydrationWarning>
                   Verificado às{" "}
                   {new Date(status.checkedAt).toLocaleTimeString("pt-BR", {
                     hour: "2-digit",

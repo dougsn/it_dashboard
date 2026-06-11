@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import * as https from "https";
-import { withAuth } from "@/lib/with-auth";
+import { requireAuth } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { resolveUnifiApiKey, resolveUnifiCredentials } from "@/lib/crypto";
 import { parseBody } from "@/lib/parse-body";
@@ -263,7 +263,9 @@ async function testUserPass(
 
 // ── Handler ─────────────────────────────────────────────────────────────────
 
-export const POST = withAuth(async (req: Request) => {
+export async function POST(req: Request) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   const raw = await parseBody(req);
   if (!raw.ok) return raw.response;
   const parsed = schema.safeParse(raw.data);
@@ -300,4 +302,4 @@ export const POST = withAuth(async (req: Request) => {
     return NextResponse.json({ error: "Informe a chave de API para testar a conexão" }, { status: 422 });
   }
   return testApiKey(controllerIp, port, site, tlsVerify, resolvedKey);
-});
+}
