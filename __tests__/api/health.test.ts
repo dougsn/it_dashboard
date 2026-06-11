@@ -3,6 +3,11 @@
  */
 import { GET } from "@/app/api/health/route";
 
+// Health now requires auth (SEC-024) — mock a valid session so logic tests run
+jest.mock("@/lib/auth", () => ({
+  auth: jest.fn().mockResolvedValue({ user: { id: "1", email: "admin@local" } }),
+}));
+
 jest.mock("@/lib/db", () => ({
   db: {
     statusHistory:   { count: jest.fn() },

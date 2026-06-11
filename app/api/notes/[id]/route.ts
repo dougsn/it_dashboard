@@ -7,7 +7,7 @@ import { notFoundOnP2025 } from "@/lib/prisma-error";
 
 const updateNoteSchema = z.object({
   title: z.string().min(1).max(200).optional(),
-  content: z.string().min(1).optional(),
+  content: z.string().min(1).max(10_000).optional(),
   severity: z.enum(["INFO", "WARNING", "HIGH", "CRITICAL"]).optional(),
   category: z.enum(["SECURITY", "OPERATIONAL", "GENERAL"]).optional(),
   status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED"]).optional(),
