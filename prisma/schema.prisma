@@ -44,7 +44,7 @@ model Device {
   unifiPassEnc      String? // AES-256-GCM encrypted password (inform API)
   unifiPort         Int     @default(443)
   unifiSite         String  @default("default")
-  unifiTlsVerify    Boolean @default(false)
+  unifiTlsVerify    Boolean @default(true)
   unifiControllerIp String? // null = usar o próprio IP do dispositivo (UDM/standalone)
 
   checkInterval Int @default(60)

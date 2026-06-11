@@ -9,7 +9,8 @@ if (!secret) {
 
 export const authConfig = {
   pages: { signIn: "/login" },
-  session: { strategy: "jwt" },
+  // SEC-028: sessão de 8h — razoável para dashboard de uso diurno
+  session: { strategy: "jwt", maxAge: 8 * 3600 },
   secret,
   trustHost: true,
   providers: [],

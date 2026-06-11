@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireAuth } from "@/lib/with-auth";
 
 export interface HealthData {
   totalChecks: number;
@@ -10,6 +11,10 @@ export interface HealthData {
 }
 
 export async function GET() {
+  // SEC-024: rota protegida — expõe métricas operacionais internas
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
+
   const since = new Date(Date.now() - 24 * 3_600_000);
 
   const [totalChecks, onlineChecks, heartbeat] = await Promise.all([

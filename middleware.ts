@@ -16,6 +16,12 @@ const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
 function isRateLimited(ip: string): boolean {
   const now = Date.now();
+  // SEC-026: purge expired entries to prevent unbounded memory growth
+  if (loginAttempts.size > 5_000) {
+    for (const [key, val] of loginAttempts) {
+      if (val.resetAt < now) loginAttempts.delete(key);
+    }
+  }
   const entry = loginAttempts.get(ip);
   if (!entry || entry.resetAt < now) {
     loginAttempts.set(ip, { count: 1, resetAt: now + 15 * 60_000 });

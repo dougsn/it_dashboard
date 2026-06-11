@@ -6,7 +6,7 @@ import { parseAndValidate } from "@/lib/parse-body";
 
 const noteSchema = z.object({
   title: z.string().min(1, "Título obrigatório").max(200),
-  content: z.string().min(1, "Conteúdo obrigatório"),
+  content: z.string().min(1, "Conteúdo obrigatório").max(10_000),
   severity: z.enum(["INFO", "WARNING", "HIGH", "CRITICAL"]).default("INFO"),
   category: z.enum(["SECURITY", "OPERATIONAL", "GENERAL"]).default("GENERAL"),
   status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED"]).default("OPEN"),

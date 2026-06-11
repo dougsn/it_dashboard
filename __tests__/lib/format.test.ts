@@ -1,4 +1,11 @@
-import { formatUptime, formatResponseTime, formatPercent } from "@/lib/format";
+import {
+  formatUptime,
+  formatResponseTime,
+  formatPercent,
+  formatBps,
+  formatDuration,
+  timeAgo,
+} from "@/lib/format";
 
 describe("formatUptime", () => {
   it("returns '—' for null", () => {
@@ -58,5 +65,95 @@ describe("formatPercent", () => {
     expect(formatPercent(75.333)).toBe("75.3%");
     expect(formatPercent(100)).toBe("100.0%");
     expect(formatPercent(0)).toBe("0.0%");
+  });
+});
+
+describe("formatBps", () => {
+  it("returns '—' for null", () => {
+    expect(formatBps(null)).toBe("—");
+  });
+
+  it("returns '—' for undefined", () => {
+    expect(formatBps(undefined)).toBe("—");
+  });
+
+  it("formats sub-kbps as raw bps", () => {
+    expect(formatBps(500)).toBe("500 bps");
+  });
+
+  it("formats kbps range", () => {
+    expect(formatBps(1_000)).toBe("1 Kbps");
+    expect(formatBps(500_000)).toBe("500 Kbps");
+  });
+
+  it("formats mbps range", () => {
+    expect(formatBps(1_000_000)).toBe("1.0 Mbps");
+    expect(formatBps(100_000_000)).toBe("100.0 Mbps");
+  });
+
+  it("formats gbps range", () => {
+    expect(formatBps(1_000_000_000)).toBe("1.0 Gbps");
+    expect(formatBps(10_000_000_000)).toBe("10.0 Gbps");
+  });
+});
+
+describe("formatDuration", () => {
+  it("returns '—' for null", () => {
+    expect(formatDuration(null)).toBe("—");
+  });
+
+  it("returns '—' for undefined", () => {
+    expect(formatDuration(undefined)).toBe("—");
+  });
+
+  it("formats sub-minute as seconds", () => {
+    expect(formatDuration(30_000)).toBe("30s");
+    expect(formatDuration(0)).toBe("0s");
+  });
+
+  it("formats minutes range", () => {
+    expect(formatDuration(60_000)).toBe("1min");
+    expect(formatDuration(3_540_000)).toBe("59min");
+  });
+
+  it("formats hours without remainder", () => {
+    expect(formatDuration(3_600_000)).toBe("1h");
+    expect(formatDuration(7_200_000)).toBe("2h");
+  });
+
+  it("formats hours with remaining minutes", () => {
+    expect(formatDuration(3_660_000)).toBe("1h 1min");
+    expect(formatDuration(7_320_000)).toBe("2h 2min");
+  });
+});
+
+describe("timeAgo", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-01-01T12:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("returns 'agora' for timestamps less than 1 minute ago", () => {
+    const iso = new Date("2026-01-01T11:59:30.000Z").toISOString();
+    expect(timeAgo(iso)).toBe("agora");
+  });
+
+  it("returns minutes for timestamps under 1 hour", () => {
+    const iso = new Date("2026-01-01T11:55:00.000Z").toISOString();
+    expect(timeAgo(iso)).toBe("há 5min");
+  });
+
+  it("returns hours for timestamps under 24 hours", () => {
+    const iso = new Date("2026-01-01T09:00:00.000Z").toISOString();
+    expect(timeAgo(iso)).toBe("há 3h");
+  });
+
+  it("returns days for timestamps over 24 hours", () => {
+    const iso = new Date("2025-12-30T12:00:00.000Z").toISOString();
+    expect(timeAgo(iso)).toBe("há 2d");
   });
 });
