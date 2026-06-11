@@ -115,7 +115,7 @@ function DeviceSelector({
 
 export default function ReportsPage() {
   const [devices, setDevices] = useState<DeviceWithStatus[]>([]);
-  const [devicesLoading, setDevicesLoading] = useState(true);
+  const [devicesLoading, setDevicesLoading] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [hours, setHours] = useState(168);
   const [showClients, setShowClients] = useState(true);
@@ -126,20 +126,23 @@ export default function ReportsPage() {
   const [error, setError] = useState<string | null>(null);
   const reportRef = useRef<HTMLDivElement>(null);
 
-  // Pre-select device from query param (?device=id)
+  const loadDevices = useCallback(async () => {
+    setDevicesLoading(true);
+    try {
+      const res = await fetch("/api/devices");
+      if (res.ok) setDevices(await res.json());
+    } finally {
+      setDevicesLoading(false);
+    }
+  }, []);
+
+  // Load devices and pre-select from query param (?device=id) — client-only
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const deviceParam = params.get("device");
     if (deviceParam) setSelected([deviceParam]);
-  }, []);
-
-  const loadDevices = useCallback(async () => {
-    const res = await fetch("/api/devices");
-    if (res.ok) setDevices(await res.json());
-    setDevicesLoading(false);
-  }, []);
-
-  useEffect(() => { loadDevices(); }, [loadDevices]);
+    loadDevices();
+  }, [loadDevices]);
 
   // Show clients toggle only when at least one UNIFI_AP is selected
   const hasUnifi = selected.some(id => devices.find(d => d.id === id)?.type === "UNIFI_AP");
