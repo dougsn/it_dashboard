@@ -184,6 +184,14 @@ model WorkerHeartbeat {
   seenAt DateTime @updatedAt
 }
 
+model SystemConfig {
+  id                  Int      @id @default(1) // singleton
+  statusHistoryDays   Int      @default(30)
+  linkEventDays       Int      @default(90)
+  lastCleanupAt       DateTime?
+  updatedAt           DateTime @updatedAt
+}
+
 model Note {
   id         String       @id @default(cuid())
   title      String

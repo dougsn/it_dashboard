@@ -10,8 +10,6 @@ import { resolveRouterosCredentials, resolveUnifiApiKey, resolveUnifiCredentials
 import { log } from "../lib/logger";
 import type { Device, Link } from "@prisma/client";
 
-const RETENTION_DAYS = 30;
-
 const timers          = new Map<string, ReturnType<typeof setInterval>>();
 const deviceSnapshots = new Map<string, Date>(); // deviceId -> last known updatedAt
 const pendingChecks   = new Set<Promise<unknown>>();
@@ -328,14 +326,26 @@ export async function pollLinks() {
 }
 
 export async function pruneHistory() {
-  const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 3_600_000);
+  const config = await db.systemConfig.upsert({
+    where: { id: 1 },
+    create: { id: 1, statusHistoryDays: 30, linkEventDays: 90 },
+    update: {},
+  });
+
+  const historyCutoff = new Date(Date.now() - config.statusHistoryDays * 24 * 3_600_000);
+  const eventCutoff   = new Date(Date.now() - config.linkEventDays   * 24 * 3_600_000);
+
   const [statusResult, eventResult] = await Promise.all([
-    db.statusHistory.deleteMany({ where: { timestamp: { lt: cutoff } } }),
-    db.linkEvent.deleteMany({ where: { timestamp: { lt: cutoff } } }),
+    db.statusHistory.deleteMany({ where: { timestamp: { lt: historyCutoff } } }),
+    db.linkEvent.deleteMany({ where: { timestamp: { lt: eventCutoff } } }),
   ]);
+
+  await db.systemConfig.update({ where: { id: 1 }, data: { lastCleanupAt: new Date() } });
+
   log("info", "[Retenção] registros removidos.", {
     statusHistory: statusResult.count,
     linkEvents: eventResult.count,
-    cutoff: cutoff.toISOString(),
+    historyCutoff: historyCutoff.toISOString(),
+    eventCutoff: eventCutoff.toISOString(),
   });
 }
