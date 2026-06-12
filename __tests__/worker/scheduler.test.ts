@@ -140,7 +140,7 @@ describe("runChecks", () => {
 
   it("calls checkRouterOS when routerosEnabled and credentials resolved", async () => {
     mockResolveCredentials.mockReturnValue({ user: "admin", pass: "secret" });
-    mockCheckRouterOS.mockResolvedValue({ uptime: 7200, cpuLoad: 5, memoryUsed: 40 });
+    mockCheckRouterOS.mockResolvedValue({ uptime: 7200, cpuLoad: 5, memoryUsed: 40, clients: [], dhcpError: null, rawLeaseCount: 0, leaseStatuses: [] });
 
     await runChecks({ ...baseDevice, pingEnabled: false, routerosEnabled: true });
 

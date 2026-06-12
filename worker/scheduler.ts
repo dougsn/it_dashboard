@@ -96,6 +96,19 @@ export async function runChecks(device: Device) {
       error: results[3].reason?.message ?? String(results[3].reason),
     });
   }
+  if (routerosResult?.dhcpError) {
+    log("warn", "[RouterOS] DHCP lease fetch falhou", {
+      device: device.name, ip: device.ip, error: routerosResult.dhcpError,
+    });
+  }
+  if (routerosResult && device.routerosEnabled) {
+    log("info", "[RouterOS] DHCP debug", {
+      device: device.name, ip: device.ip,
+      rawLeases: routerosResult.rawLeaseCount,
+      boundLeases: routerosResult.clients.length,
+      statuses: routerosResult.leaseStatuses,
+    });
+  }
   const unifiError = results[4].status === "rejected" && device.unifiEnabled
     ? (results[4].reason?.message ?? String(results[4].reason))
     : null;
@@ -127,6 +140,10 @@ export async function runChecks(device: Device) {
 
   const now = new Date();
 
+  const routerosUpdate = device.routerosEnabled && routerosResult
+    ? { routerosData: routerosResult as unknown as import("@prisma/client").Prisma.InputJsonValue }
+    : {};
+
   const unifiUpdate = device.unifiEnabled
     ? unifiResult
       ? { unifiData: unifiResult as unknown as import("@prisma/client").Prisma.InputJsonValue, unifiError: null }
@@ -142,8 +159,8 @@ export async function runChecks(device: Device) {
   await db.$transaction([
     db.deviceStatus.upsert({
       where: { deviceId: device.id },
-      update: { isOnline, pingMs, httpOk, uptime, cpuLoad, memoryUsed, ...unifiUpdate, ...omadaUpdate, checkedAt: now },
-      create: { deviceId: device.id, isOnline, pingMs, httpOk, uptime, cpuLoad, memoryUsed, ...unifiUpdate, ...omadaUpdate, checkedAt: now },
+      update: { isOnline, pingMs, httpOk, uptime, cpuLoad, memoryUsed, ...routerosUpdate, ...unifiUpdate, ...omadaUpdate, checkedAt: now },
+      create: { deviceId: device.id, isOnline, pingMs, httpOk, uptime, cpuLoad, memoryUsed, ...routerosUpdate, ...unifiUpdate, ...omadaUpdate, checkedAt: now },
     }),
     db.statusHistory.create({
       data: { deviceId: device.id, isOnline, pingMs, cpuLoad, memoryUsed, timestamp: now },
@@ -161,6 +178,12 @@ export async function runChecks(device: Device) {
       ip: device.ip,
       clients: unifiResult.totalClients,
       ssids: unifiResult.ssids.length,
+    });
+  } else if (routerosResult) {
+    log("info", `${isOnline ? "✓" : "✗"} ${device.name}`, {
+      ip: device.ip,
+      dhcpClients: routerosResult.clients.length,
+      pingMs: pingMs ?? null,
     });
   } else {
     log("info", `${isOnline ? "✓" : "✗"} ${device.name}`, { ip: device.ip, pingMs: pingMs ?? null });
@@ -247,7 +270,7 @@ export async function startScheduler() {
   // Heartbeat: lets /api/health detect if the worker has stopped
   const updateHeartbeat = () =>
     db.workerHeartbeat
-      .upsert({ where: { id: 1 }, update: {}, create: { id: 1, seenAt: new Date() } })
+      .upsert({ where: { id: 1 }, update: { seenAt: new Date() }, create: { id: 1, seenAt: new Date() } })
       .catch(() => {});
   void updateHeartbeat();
   makeInterval(updateHeartbeat, 60_000);

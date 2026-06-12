@@ -86,6 +86,7 @@ describe("DeviceCard", () => {
             unifiError: null,
             omadaData: null,
             omadaError: null,
+            routerosData: null,
             checkedAt: new Date(),
           },
         }}
@@ -112,6 +113,7 @@ describe("DeviceCard", () => {
             unifiError: null,
             omadaData: null,
             omadaError: null,
+            routerosData: null,
             checkedAt: new Date(),
           },
         }}
@@ -138,6 +140,7 @@ describe("DeviceCard", () => {
             unifiError: null,
             omadaData: null,
             omadaError: null,
+            routerosData: null,
             checkedAt: new Date(),
           },
         }}
@@ -164,6 +167,7 @@ describe("DeviceCard", () => {
             unifiError: null,
             omadaData: null,
             omadaError: null,
+            routerosData: null,
             checkedAt: new Date(),
           },
         }}
@@ -196,6 +200,7 @@ describe("DeviceCard", () => {
             unifiError: null,
             omadaData: null,
             omadaError: null,
+            routerosData: null,
             checkedAt: new Date(),
           },
         }}

@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { formatUptime, formatBps, timeAgo } from "@/lib/format";
 import {
   Wifi, Users, Cpu, MemoryStick, Clock, ArrowDownToLine, ArrowUpFromLine,
-  ChevronDown, ChevronUp, AlertTriangle, Radio, ExternalLink, ArrowUpDown,
+  ChevronDown, ChevronUp, AlertTriangle, Radio, ExternalLink, ArrowUpDown, RefreshCw,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -339,14 +339,22 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string; s
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function UnifiPage() {
-  const [devices, setDevices] = useState<UnifiDevice[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [devices,    setDevices]    = useState<UnifiDevice[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [isChecking, setIsChecking] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/devices?type=UNIFI_AP");
     if (res.ok) setDevices(await res.json());
     setLoading(false);
   }, []);
+
+  async function handleCheckAll() {
+    setIsChecking(true);
+    await fetch("/api/devices/check?type=UNIFI_AP", { method: "POST" }).catch(() => {});
+    await load();
+    setIsChecking(false);
+  }
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -370,7 +378,16 @@ export default function UnifiPage() {
       <Topbar
         title="Painel UniFi"
         subtitle={loading ? "Carregando..." : `${devices.length} AP${devices.length !== 1 ? "s" : ""} registrado${devices.length !== 1 ? "s" : ""}`}
-      />
+      >
+        <button
+          onClick={handleCheckAll}
+          disabled={isChecking}
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-xs font-semibold bg-background hover:bg-muted transition-colors disabled:opacity-60"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isChecking ? "animate-spin" : ""}`} />
+          {isChecking ? "Verificando..." : "Atualizar todos"}
+        </button>
+      </Topbar>
 
       <div className="p-7 space-y-6">
         {/* KPIs */}

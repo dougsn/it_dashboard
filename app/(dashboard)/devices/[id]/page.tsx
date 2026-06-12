@@ -27,7 +27,7 @@ import { Topbar } from "@/components/topbar";
 import {
   Pencil, Trash2, Cpu, MemoryStick, Clock, Wifi, Globe, Activity,
   Users, Radio, AlertTriangle, ArrowDownToLine, ArrowUpFromLine,
-  ChevronDown, ChevronUp, ArrowUpDown, FileText,
+  ChevronDown, ChevronUp, ArrowUpDown, FileText, RefreshCw,
 } from "lucide-react";
 
 import { toast } from "sonner";
@@ -85,6 +85,17 @@ interface OmadaClient {
   uptime: number | null;
 }
 
+interface RouterOSClient {
+  mac: string;
+  ip: string;
+  hostname: string | null;
+  server: string | null;
+}
+
+interface RouterOSData {
+  clients: RouterOSClient[];
+}
+
 interface OmadaData {
   model: string | null;
   firmware: string | null;
@@ -137,7 +148,9 @@ export default function DeviceDetailPage({
   const [history, setHistory] = useState<StatusHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [hours, setHours] = useState<HourOption>(24);
+  const [isChecking, setIsChecking] = useState(false);
   const [clientsExpanded, setClientsExpanded] = useState(false);
+  const [dhcpExpanded, setDhcpExpanded] = useState(false);
   const [clientSort, setClientSort] = useState<ClientSortKey>("signal");
   const [historyExpanded, setHistoryExpanded] = useState(false);
 
@@ -163,6 +176,13 @@ export default function DeviceDetailPage({
     }, 30_000);
     return () => clearInterval(interval);
   }, [id]);
+
+  async function handleCheck() {
+    setIsChecking(true);
+    await fetch(`/api/devices/${id}/check`, { method: "POST" }).catch(() => {});
+    await load(hours);
+    setIsChecking(false);
+  }
 
   async function handleDelete() {
     const res = await fetch(`/api/devices/${id}`, { method: "DELETE" });
@@ -200,6 +220,9 @@ export default function DeviceDetailPage({
   const isInformApi = (device as Device & { unifiAuthMethod?: string }).unifiAuthMethod === "userpass";
   const omadaData = ((status as (typeof status & { omadaData?: unknown }))?.omadaData ?? null) as OmadaData | null;
   const omadaError = (device as Device & { omadaEnabled?: boolean }).omadaEnabled ? ((status as (typeof status & { omadaError?: string }))?.omadaError ?? null) : null;
+  const routerosData = device.routerosEnabled
+    ? (((status as (typeof status & { routerosData?: unknown }))?.routerosData ?? null) as RouterOSData | null)
+    : null;
 
   // Build sorted client list (UniFi or Omada)
   const activeClients = unifiData?.clients ?? omadaData?.clients ?? [];
@@ -241,6 +264,10 @@ export default function DeviceDetailPage({
           <FileText className="h-4 w-4 mr-1" />
           Relatório
         </Link>
+        <Button variant="outline" size="sm" onClick={handleCheck} disabled={isChecking}>
+          <RefreshCw className={`h-4 w-4 mr-1 ${isChecking ? "animate-spin" : ""}`} />
+          {isChecking ? "Verificando..." : "Verificar agora"}
+        </Button>
         <Link href={`/devices/${id}/edit`} className={buttonVariants({ variant: "outline", size: "sm" })}>
           <Pencil className="h-4 w-4 mr-1" />
           Editar
@@ -622,6 +649,57 @@ export default function DeviceDetailPage({
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* DHCP clients (RouterOS) */}
+        {device.routerosEnabled && (
+          <div className="space-y-3">
+            <button
+              onClick={() => setDhcpExpanded((v) => !v)}
+              className="w-full flex items-center justify-between font-semibold hover:text-foreground/80 transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Clientes DHCP
+                {routerosData !== null && (
+                  <Badge variant="secondary" className="text-xs">{routerosData.clients.length}</Badge>
+                )}
+              </span>
+              {dhcpExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+            {dhcpExpanded && (
+              <div className="rounded-lg border bg-card overflow-hidden">
+                {routerosData === null ? (
+                  <p className="px-4 py-3 text-xs text-muted-foreground">Aguardando primeira coleta...</p>
+                ) : routerosData.clients.length === 0 ? (
+                  <p className="px-4 py-3 text-xs text-muted-foreground">Nenhum cliente DHCP ativo.</p>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/40 border-b">
+                      <tr>
+                        <th className="text-left px-4 py-2.5 font-medium">Hostname</th>
+                        <th className="text-left px-4 py-2.5 font-medium">IP</th>
+                        <th className="text-left px-4 py-2.5 font-medium">MAC</th>
+                        <th className="text-left px-4 py-2.5 font-medium">Servidor</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {routerosData.clients.map((c) => (
+                        <tr key={c.mac} className="hover:bg-muted/10">
+                          <td className="px-4 py-2 font-medium">
+                            {c.hostname ?? <span className="text-muted-foreground italic">sem nome</span>}
+                          </td>
+                          <td className="px-4 py-2 font-mono text-muted-foreground">{c.ip || "—"}</td>
+                          <td className="px-4 py-2 font-mono text-[10px] text-muted-foreground">{c.mac}</td>
+                          <td className="px-4 py-2 text-muted-foreground">{c.server ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             )}
           </div>

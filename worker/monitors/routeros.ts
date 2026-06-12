@@ -1,9 +1,28 @@
 import { RouterOSAPI } from "routeros";
 
+export interface RouterOSClient {
+  mac: string;
+  ip: string;
+  hostname: string | null;
+  server: string | null;
+}
+
 export interface RouterOSResult {
   uptime: number | null;
   cpuLoad: number | null;
   memoryUsed: number | null;
+  clients: RouterOSClient[];
+  dhcpError: string | null;
+  rawLeaseCount: number;
+  leaseStatuses: string[];
+}
+
+interface LeaseItem {
+  address?: string;
+  "mac-address"?: string;
+  "host-name"?: string;
+  status?: string;
+  server?: string;
 }
 
 function parseUptime(str: string): number {
@@ -34,6 +53,14 @@ export async function checkRouterOS(
 
     const [resource] = await conn.write("/system/resource/print");
 
+    let rawLeases: LeaseItem[] = [];
+    let dhcpError: string | null = null;
+    try {
+      rawLeases = (await conn.write("/ip/dhcp-server/lease/print")) as unknown as LeaseItem[];
+    } catch (err) {
+      dhcpError = err instanceof Error ? err.message : String(err);
+    }
+
     conn.close();
 
     const uptime = resource?.["uptime"]
@@ -48,7 +75,22 @@ export async function checkRouterOS(
     const memoryUsed =
       totalMem > 0 ? ((totalMem - freeMem) / totalMem) * 100 : null;
 
-    return { uptime, cpuLoad, memoryUsed };
+    const clients: RouterOSClient[] = rawLeases
+      .filter((l) => l.status === "bound")
+      .map((l) => ({
+        mac:      l["mac-address"] ?? "",
+        ip:       l.address ?? "",
+        hostname: l["host-name"] ?? null,
+        server:   l.server ?? null,
+      }));
+
+    const leaseStatuses = [...new Set(rawLeases.map((l) => l.status ?? "(sem status)"))];
+
+    return {
+      uptime, cpuLoad, memoryUsed, clients, dhcpError,
+      rawLeaseCount: rawLeases.length,
+      leaseStatuses,
+    };
   } catch (err) {
     try { conn.close(); } catch {}
     throw err; // re-throw so the scheduler can log it

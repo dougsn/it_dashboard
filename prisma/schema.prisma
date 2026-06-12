@@ -79,10 +79,11 @@ model DeviceStatus {
   uptime     Int?
   cpuLoad    Float?
   memoryUsed Float?
-  unifiData  Json?
-  unifiError String?
-  omadaData  Json?
-  omadaError String?
+  routerosData Json?
+  unifiData    Json?
+  unifiError   String?
+  omadaData    Json?
+  omadaError   String?
 
   checkedAt DateTime @default(now())
 }

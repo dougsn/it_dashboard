@@ -10,10 +10,17 @@ import { formatUptime, formatBps, formatResponseTime, timeAgo } from "@/lib/form
 import {
   Cpu, MemoryStick, Clock, Network, ExternalLink,
   AlertTriangle, ArrowDownToLine, ArrowUpFromLine,
-  ChevronDown, ChevronUp, Globe, Router,
+  ChevronDown, ChevronUp, Globe, Router, Users, RefreshCw,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
+
+interface RouterOSClient {
+  mac: string;
+  ip: string;
+  hostname: string | null;
+  server: string | null;
+}
 
 interface DeviceStatus {
   isOnline: boolean;
@@ -23,6 +30,7 @@ interface DeviceStatus {
   cpuLoad: number | null;
   memoryUsed: number | null;
   checkedAt: string;
+  routerosData?: { clients: RouterOSClient[] } | null;
 }
 
 interface MikrotikDevice {
@@ -99,7 +107,8 @@ function DeviceCard({
   device: MikrotikDevice;
   links: AssociatedLink[];
 }) {
-  const [linksOpen, setLinksOpen] = useState(false);
+  const [linksOpen,   setLinksOpen]   = useState(false);
+  const [clientsOpen, setClientsOpen] = useState(false);
 
   const status     = device.currentStatus;
   const isOnline   = status?.isOnline ?? false;
@@ -261,6 +270,62 @@ function DeviceCard({
           )}
         </div>
       )}
+
+      {/* DHCP clients */}
+      {device.routerosEnabled && (() => {
+        const clients = status?.routerosData?.clients ?? null;
+        return (
+          <div className={links.length > 0 ? "border-t" : ""}>
+            <button
+              onClick={() => setClientsOpen(v => !v)}
+              className="w-full flex items-center justify-between px-5 py-2.5 text-xs font-semibold hover:bg-muted/30 transition-colors"
+            >
+              <span className="flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                Clientes DHCP
+                {clients !== null && (
+                  <Badge variant="secondary" className="text-[10px]">{clients.length}</Badge>
+                )}
+              </span>
+              {clientsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+            {clientsOpen && (
+              <div className="border-t">
+                {clients === null ? (
+                  <p className="px-5 py-3 text-xs text-muted-foreground">Aguardando primeira coleta...</p>
+                ) : clients.length === 0 ? (
+                  <p className="px-5 py-3 text-xs text-muted-foreground">Nenhum cliente DHCP ativo.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/40">
+                        <tr>
+                          <th className="text-left px-5 py-2 font-medium text-muted-foreground">Hostname</th>
+                          <th className="text-left px-4 py-2 font-medium text-muted-foreground">IP</th>
+                          <th className="text-left px-4 py-2 font-medium text-muted-foreground">MAC</th>
+                          <th className="text-left px-4 py-2 font-medium text-muted-foreground">Servidor</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {clients.map(client => (
+                          <tr key={client.mac} className="hover:bg-muted/10">
+                            <td className="px-5 py-2 font-semibold">
+                              {client.hostname ?? <span className="text-muted-foreground italic">sem nome</span>}
+                            </td>
+                            <td className="px-4 py-2 font-mono text-muted-foreground">{client.ip || "—"}</td>
+                            <td className="px-4 py-2 font-mono text-[10px] text-muted-foreground">{client.mac}</td>
+                            <td className="px-4 py-2 text-muted-foreground">{client.server ?? "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -280,9 +345,10 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string; s
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function MikrotikPage() {
-  const [devices, setDevices] = useState<MikrotikDevice[]>([]);
-  const [links,   setLinks]   = useState<(AssociatedLink & { mikrotikDeviceId: string | null })[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [devices,    setDevices]    = useState<MikrotikDevice[]>([]);
+  const [links,      setLinks]      = useState<(AssociatedLink & { mikrotikDeviceId: string | null })[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [isChecking, setIsChecking] = useState(false);
 
   const load = useCallback(async () => {
     const [devRes, linkRes] = await Promise.all([
@@ -293,6 +359,13 @@ export default function MikrotikPage() {
     if (linkRes.ok) setLinks(await linkRes.json());
     setLoading(false);
   }, []);
+
+  async function handleCheckAll() {
+    setIsChecking(true);
+    await fetch("/api/devices/check?type=MIKROTIK", { method: "POST" }).catch(() => {});
+    await load();
+    setIsChecking(false);
+  }
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -325,7 +398,16 @@ export default function MikrotikPage() {
       <Topbar
         title="Painel Mikrotik"
         subtitle={loading ? "Carregando..." : `${devices.length} dispositivo${devices.length !== 1 ? "s" : ""} registrado${devices.length !== 1 ? "s" : ""}`}
-      />
+      >
+        <button
+          onClick={handleCheckAll}
+          disabled={isChecking}
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-xs font-semibold bg-background hover:bg-muted transition-colors disabled:opacity-60"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isChecking ? "animate-spin" : ""}`} />
+          {isChecking ? "Verificando..." : "Atualizar todos"}
+        </button>
+      </Topbar>
 
       <div className="p-7 space-y-6">
         {/* KPIs */}

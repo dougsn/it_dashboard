@@ -120,6 +120,7 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
   async function handleTest() {
     if (!deviceId) return;
     setTesting(true);
+    await fetch(`/api/devices/${deviceId}/check`, { method: "POST" }).catch(() => {});
     await fetchData(deviceId, hours);
     setTesting(false);
   }
