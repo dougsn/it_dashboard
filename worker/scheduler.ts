@@ -199,9 +199,17 @@ function scheduleDevice(device: Device) {
 
   const intervalMs = device.checkInterval * 1000;
 
-  void trackAsync(runChecks(device).catch(() => {}));
+  const safeRun = () => runChecks(device).catch((err: unknown) => {
+    log("error", "[Scheduler] runChecks falhou", {
+      device: device.name, ip: device.ip,
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack?.split("\n").slice(0, 3).join(" | ") : undefined,
+    });
+  });
 
-  const timer = makeInterval(() => void trackAsync(runChecks(device).catch(() => {})), intervalMs);
+  void trackAsync(safeRun());
+
+  const timer = makeInterval(() => void trackAsync(safeRun()), intervalMs);
   timers.set(device.id, timer);
 }
 
