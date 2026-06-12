@@ -156,8 +156,8 @@ export default function DeviceDetailPage({
 
   const load = useCallback(async (h: number) => {
     const [devRes, histRes] = await Promise.all([
-      fetch(`/api/devices/${id}`),
-      fetch(`/api/status/${id}?hours=${h}`),
+      fetch(`/api/devices/${id}`, { cache: "no-store" }),
+      fetch(`/api/status/${id}?hours=${h}`, { cache: "no-store" }),
     ]);
     if (devRes.ok) setDevice(await devRes.json());
     if (histRes.ok) setHistory(await histRes.json());
