@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Wifi, MapPin, History, Zap, X, AlertTriangle, ArrowDown, ArrowUp } from "lucide-react";
-import { formatBps, formatDuration } from "@/lib/format";
+import { formatBps, formatDuration, fmtDateTime, fmtDate } from "@/lib/format";
 
 type SegState = "online" | "offline" | "degraded" | "empty";
 
@@ -301,10 +301,10 @@ export function LinkDetailDrawer({ linkId, onClose }: Props) {
                 <InfoRow label="Uptime 30d" value={uptime30d != null ? `${uptime30d.toFixed(2)}%` : "—"} />
                 {link.lastEventAt && (
                   <InfoRow label="Último evento"
-                    value={new Date(link.lastEventAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} />
+                    value={fmtDateTime(link.lastEventAt, { dateStyle: "short", timeStyle: "short" })} />
                 )}
                 <InfoRow label="Cadastrado em"
-                  value={new Date(link.createdAt).toLocaleDateString("pt-BR")} />
+                  value={fmtDate(link.createdAt)} />
               </div>
             ) : null}
           </div>

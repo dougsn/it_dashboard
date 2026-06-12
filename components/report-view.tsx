@@ -20,19 +20,21 @@ const TYPE_LABEL: Record<DeviceType, string> = {
   OMADA_AP: "Omada AP (TP-Link)",
 };
 
+const TZ = "America/Sao_Paulo";
+
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleString("pt-BR", {
-    day: "2-digit", month: "2-digit", year: "numeric",
+    timeZone: TZ, day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
 }
 
 function fmtDateShort(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  return new Date(iso).toLocaleDateString("pt-BR", { timeZone: TZ, day: "2-digit", month: "2-digit" });
 }
 
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("pt-BR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
 }
 
 function fmtBps(bps: number) {
@@ -636,15 +638,15 @@ export function ReportView({
                 Relatório de {reports.length === 1 ? reports[0].device.name : `${reports.length} dispositivos`}
               </h1>
               <p className="text-sm text-gray-500 mt-1">
-                Gerado em {generatedAt.toLocaleString("pt-BR", { dateStyle: "full", timeStyle: "short" })}
+                Gerado em {generatedAt.toLocaleString("pt-BR", { timeZone: TZ, dateStyle: "full", timeStyle: "short" })}
               </p>
             </div>
             <div className="text-right text-xs text-gray-400 space-y-0.5">
               <p>{reports[0]?.period.hours}h de histórico</p>
               <p>
-                {new Date(reports[0]?.period.from).toLocaleDateString("pt-BR")}
+                {new Date(reports[0]?.period.from).toLocaleDateString("pt-BR", { timeZone: TZ })}
                 {" → "}
-                {new Date(reports[0]?.period.to).toLocaleDateString("pt-BR")}
+                {new Date(reports[0]?.period.to).toLocaleDateString("pt-BR", { timeZone: TZ })}
               </p>
             </div>
           </div>
@@ -659,7 +661,7 @@ export function ReportView({
 
         {/* Footer */}
         <div className="px-8 py-4 border-t border-gray-100 text-xs text-gray-400 text-center">
-          WatchIT Tower — Relatório gerado automaticamente em {generatedAt.toLocaleString("pt-BR")}
+          WatchIT Tower — Relatório gerado automaticamente em {generatedAt.toLocaleString("pt-BR", { timeZone: TZ })}
         </div>
       </div>
   );

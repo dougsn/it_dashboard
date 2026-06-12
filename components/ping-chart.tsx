@@ -10,6 +10,7 @@ import {
   Tooltip,
 } from "recharts";
 import type { StatusHistory } from "@prisma/client";
+import { fmtTime } from "@/lib/format";
 
 interface Props {
   history: StatusHistory[];
@@ -34,10 +35,7 @@ export function PingChart({ history, threshold = 150 }: Props) {
   if (history.length < 2) return null;
 
   const data = history.map((h) => ({
-    time: new Date(h.timestamp).toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
+    time: fmtTime(h.timestamp, { hour: "2-digit", minute: "2-digit" }),
     // null when offline (line gap), pingMs when online
     value: h.isOnline ? (h.pingMs ?? null) : null,
     seg: classify(h.isOnline ? (h.pingMs ?? null) : null, threshold),

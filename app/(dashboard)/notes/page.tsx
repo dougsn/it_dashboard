@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { fmtDate } from "@/lib/format";
 
 type NoteSeverity = "INFO" | "WARNING" | "HIGH" | "CRITICAL";
 type NoteCategory = "SECURITY" | "OPERATIONAL" | "GENERAL";
@@ -445,12 +446,10 @@ function NoteCard({
       <CardContent className="pb-3 px-4">
         <p className="text-sm text-muted-foreground line-clamp-2">{note.content}</p>
         <p className="text-xs text-muted-foreground mt-2">
-          {new Date(note.createdAt).toLocaleDateString("pt-BR", {
-            day: "2-digit", month: "2-digit", year: "numeric",
-          })}
+          {fmtDate(note.createdAt, { day: "2-digit", month: "2-digit", year: "numeric" })}
           {note.resolvedAt && (
             <span className="ml-2 text-success">
-              · Resolvido em {new Date(note.resolvedAt).toLocaleDateString("pt-BR")}
+              · Resolvido em {fmtDate(note.resolvedAt)}
             </span>
           )}
         </p>

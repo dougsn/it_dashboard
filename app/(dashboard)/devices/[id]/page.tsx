@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { StatusBadge } from "@/components/status-badge";
 import { MetricsChart } from "@/components/metrics-chart";
 import { PingChart } from "@/components/ping-chart";
-import { formatUptime, formatResponseTime, formatPercent } from "@/lib/format";
+import { formatUptime, formatResponseTime, formatPercent, fmtDateTime } from "@/lib/format";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -642,7 +642,7 @@ export default function DeviceDetailPage({
                         )}
                         {isInformApi && (
                           <td className="px-4 py-2 font-mono text-muted-foreground">
-                            {(c as UnifiClient).connectedAt ? new Date((c as UnifiClient).connectedAt!).toLocaleString("pt-BR") : "—"}
+                            {(c as UnifiClient).connectedAt ? fmtDateTime((c as UnifiClient).connectedAt!) : "—"}
                           </td>
                         )}
                       </tr>
@@ -728,7 +728,7 @@ export default function DeviceDetailPage({
                   {historyVisible.map((h) => (
                     <tr key={h.id} className="hover:bg-muted/10">
                       <td className="px-4 py-2 font-mono text-muted-foreground">
-                        {new Date(h.timestamp).toLocaleString("pt-BR")}
+                        {fmtDateTime(h.timestamp)}
                       </td>
                       <td className="px-4 py-2">
                         <StatusBadge isOnline={h.isOnline} />

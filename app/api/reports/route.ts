@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/with-auth";
+import { fmtDate } from "@/lib/format";
 import type { DeviceType } from "@prisma/client";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -141,7 +142,7 @@ function buildInsights(
     const worst = resolved[0];
     const min = Math.round((worst.durationMs ?? 0) / 60_000);
     const label = min >= 60 ? `${Math.floor(min / 60)}h ${min % 60}min` : `${min}min`;
-    insights.push({ level: "warn", text: `Pior incidente: queda de ${label} em ${new Date(worst.startAt).toLocaleDateString("pt-BR")}.` });
+    insights.push({ level: "warn", text: `Pior incidente: queda de ${label} em ${fmtDate(worst.startAt)}.` });
   }
 
   // CPU (Mikrotik)

@@ -7,7 +7,7 @@ import {
   SheetContent,
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatUptime } from "@/lib/format";
+import { formatUptime, fmtTime } from "@/lib/format";
 import { DEVICE_TYPE_ICON, DEVICE_TYPE_ICON_BG, DEVICE_TYPE_LABEL } from "@/lib/device-constants";
 import { MapPin, History, Zap, X } from "lucide-react";
 import { PingSparkline } from "@/components/ping-sparkline";
@@ -141,7 +141,7 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
   const TypeIcon = device ? DEVICE_TYPE_ICON[device.type] : DEVICE_TYPE_ICON.OTHER;
 
   const timeLabels = history.map((h) =>
-    new Date(h.timestamp).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    fmtTime(h.timestamp, { hour: "2-digit", minute: "2-digit" })
   );
 
   const sparklineData   = history.map((h) => (h.isOnline ? (h.pingMs ?? null) : null));
@@ -367,7 +367,7 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
                 {status?.checkedAt && (
                   <InfoRow
                     label="Última verificação"
-                    value={new Date(status.checkedAt).toLocaleTimeString("pt-BR")}
+                    value={fmtTime(status.checkedAt)}
                     suppressHydration
                   />
                 )}

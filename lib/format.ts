@@ -39,6 +39,20 @@ export function formatDuration(ms: number | null | undefined): string {
   return rem > 0 ? `${h}h ${rem}min` : `${h}h`;
 }
 
+const TZ = "America/Sao_Paulo";
+
+export function fmtTime(date: Date | string | number, opts: Intl.DateTimeFormatOptions = {}): string {
+  return new Date(date).toLocaleTimeString("pt-BR", { timeZone: TZ, ...opts });
+}
+
+export function fmtDate(date: Date | string | number, opts: Intl.DateTimeFormatOptions = {}): string {
+  return new Date(date).toLocaleDateString("pt-BR", { timeZone: TZ, ...opts });
+}
+
+export function fmtDateTime(date: Date | string | number, opts: Intl.DateTimeFormatOptions = {}): string {
+  return new Date(date).toLocaleString("pt-BR", { timeZone: TZ, ...opts });
+}
+
 export function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60_000);
