@@ -82,6 +82,34 @@ const notes = [
     category: "OPERATIONAL" as const,
     status: "OPEN" as const,
   },
+  {
+    title: "SEC-021 — Cache de papel JWT não invalida imediatamente",
+    content:
+      `O papel do usuário (ADMIN, OPERADOR, VIEWER) é embutido no token JWT no momento do login. ` +
+      `Alterações de papel feitas por um administrador só têm efeito na próxima sessão (até 8h depois).\n\n` +
+      `Impacto: Rebaixamento de cargo ou revogação de acesso não são imediatos — ` +
+      `o usuário afetado mantém o papel antigo até o token expirar.\n\n` +
+      `Ação imediata em caso de emergência: excluir o usuário do banco via Prisma Studio ` +
+      `ou script. Alterar o papel não é suficiente sem forçar o logout.\n\n` +
+      `Mitigação futura: Lista negra de tokens JWT (Redis/banco) ou migrar para sessões de banco ` +
+      `que permitem invalidação instantânea.`,
+    severity: "INFO" as const,
+    category: "SECURITY" as const,
+    status: "OPEN" as const,
+  },
+  {
+    title: "SEC-022 — Eventos de webhook de links não registrados no AuditLog",
+    content:
+      `As rotas GET /api/links/:id/up e GET /api/links/:id/down alteram o status de links de internet ` +
+      `mas não registram nenhuma entrada no sistema de auditoria.\n\n` +
+      `Impacto: Mudanças de status via webhook (Zabbix, Nagios, scripts externos) ficam invisíveis ` +
+      `nos Logs de Alterações — não é possível rastrear quem chamou, de qual IP e quando.\n\n` +
+      `Mitigação: Adicionar writeAudit com action "UPDATE", entity "Link", ipAddress e ` +
+      `details: { event: "up" | "down", source: "webhook" } em ambas as rotas webhook.`,
+    severity: "INFO" as const,
+    category: "SECURITY" as const,
+    status: "OPEN" as const,
+  },
 ];
 
 async function main() {

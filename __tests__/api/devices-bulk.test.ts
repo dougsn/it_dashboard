@@ -22,7 +22,8 @@ import { db } from "@/lib/db";
 const mockAuth = auth as jest.MockedFunction<typeof auth>;
 const mockDb = db as jest.Mocked<typeof db>;
 
-const FAKE_SESSION = { user: { id: "user-1", name: "admin" }, expires: "2099-01-01" };
+const FAKE_SESSION = { user: { id: "user-1", name: "admin", role: "OPERADOR" }, expires: "2099-01-01" };
+const VIEWER_SESSION = { user: { id: "user-2", name: "viewer", role: "VIEWER" }, expires: "2099-01-01" };
 
 const BASE_PAYLOAD = {
   name: "Camera",
@@ -47,6 +48,12 @@ describe("POST /api/devices/bulk", () => {
     mockAuth.mockResolvedValue(null as never);
     const res = await POST(makeReq(BASE_PAYLOAD));
     expect(res.status).toBe(401);
+  });
+
+  it("returns 403 when authenticated as VIEWER", async () => {
+    mockAuth.mockResolvedValue(VIEWER_SESSION as never);
+    const res = await POST(makeReq(BASE_PAYLOAD));
+    expect(res.status).toBe(403);
   });
 
   it("creates devices and returns 201 with count", async () => {

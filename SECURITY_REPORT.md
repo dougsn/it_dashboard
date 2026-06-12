@@ -1,6 +1,6 @@
 # Relatório de Segurança — IT Dashboard
 
-**Última atualização:** 2026-06-05  
+**Última atualização:** 2026-06-12  
 **Versão do sistema:** 0.1.0  
 **Analista:** Análise automatizada via Claude Code  
 **Escopo:** Código-fonte completo — Next.js (frontend/API), worker de monitoramento, banco PostgreSQL
@@ -14,11 +14,11 @@ O IT Dashboard é uma aplicação interna para monitoramento de equipamentos de 
 | Severidade | Total | Resolvido | Aberto |
 |-----------|-------|-----------|--------|
 | 🔴 Crítico  | 1     | 1         | 0      |
-| 🟠 Alto     | 2     | 2         | 0      |
+| 🟠 Alto     | 3     | 3         | 0      |
 | 🟡 Médio    | 3     | 1         | 2      |
-| 🔵 Baixo    | 3     | 0         | 3      |
-| ℹ️ Info     | 9     | 2         | 7      |
-| **Total**  | **18**| **6**     | **12** |
+| 🔵 Baixo    | 3     | 1         | 2      |
+| ℹ️ Info     | 12    | 4         | 8      |
+| **Total**  | **22**| **10**    | **12** |
 
 ---
 
@@ -90,12 +90,11 @@ O banco PostgreSQL corre em container Docker. Permissões de acesso dependem da 
 ---
 
 ### SEC-007 — Sem auditoria de ações administrativas
-**Severidade:** 🔵 BAIXO — 🔴 ABERTO  
-**Categoria:** Rastreabilidade
+**Severidade:** 🔵 BAIXO — ✅ RESOLVIDO  
+**Categoria:** Rastreabilidade  
+**Resolvido em:** branch `feat/audit-logs`
 
-Não há registro de quem criou, editou ou removeu dispositivos, links e notas.
-
-**Mitigação futura:** Adicionar modelo `AuditLog` ao schema Prisma com campos `action`, `entity`, `entityId`, `userId`, `payload` e `createdAt`. Registrar em todos os handlers PUT/DELETE/POST.
+Sistema de auditoria completo implementado: modelo `AuditLog` com ações `CREATE`, `UPDATE`, `DELETE`, `LOGIN`, `LOGIN_FAILED`, `CLEANUP`. Todos os handlers POST/PUT/DELETE registram o ator (userId + username), a entidade, o IP de origem e detalhes da operação. Tela `/audit` com filtros, paginação, exportação CSV e purge explícito com confirmação.
 
 ---
 
@@ -128,16 +127,11 @@ O campo `ip` aceita qualquer string não vazia sem validar formato IPv4 estrito.
 ---
 
 ### SEC-011 — Sem timeout de sessão explícito
-**Severidade:** ℹ️ INFO — 🔴 ABERTO  
-**Categoria:** Gerenciamento de sessão
+**Severidade:** ℹ️ INFO — ✅ RESOLVIDO  
+**Categoria:** Gerenciamento de sessão  
+**Resolvido em:** `lib/auth.config.ts`
 
-Tokens JWT usam o `maxAge` padrão do NextAuth (30 dias).
-
-**Mitigação futura:**
-```typescript
-// lib/auth.ts
-session: { strategy: "jwt", maxAge: 8 * 60 * 60 }, // 8 horas
-```
+`session: { strategy: "jwt", maxAge: 8 * 3600 }` configurado — sessões expiram em 8 horas.
 
 ---
 
@@ -214,15 +208,55 @@ Se o banco ficar indisponível na subida, `startScheduler()` pode travar indefin
 
 ---
 
+### SEC-019 — Criação em massa de dispositivos acessível por VIEWER
+**Severidade:** 🟠 ALTO — ✅ RESOLVIDO  
+**Categoria:** Controle de acesso  
+**Resolvido em:** branch `feat/security-audit-2`
+
+`POST /api/devices/bulk` usava `requireAuth()` em vez de `requireRole("OPERADOR")`, permitindo que qualquer usuário autenticado (inclusive VIEWER) criasse até 254 dispositivos por chamada. Corrigido para exigir perfil OPERADOR ou superior.
+
+---
+
+### SEC-020 — CSV export vulnerável a injeção de fórmula
+**Severidade:** ℹ️ INFO — ✅ RESOLVIDO  
+**Categoria:** Segurança de dados  
+**Resolvido em:** branch `feat/security-audit-2`
+
+`csvEscape()` em `app/api/admin/audit/export/route.ts` não prefixava caracteres de fórmula (`=`, `+`, `-`, `@`). Um `entityName` começando com `=` poderia ser executado como fórmula ao abrir o CSV no Excel/LibreOffice. Corrigido: valores que começam com esses caracteres recebem prefixo `'` e são citados.
+
+---
+
+### SEC-021 — Cache de papel (role) no JWT não atualiza imediatamente
+**Severidade:** ℹ️ INFO — 🔴 ABERTO  
+**Categoria:** Controle de acesso
+
+O papel do usuário é embutido no token JWT no momento do login. Se um administrador alterar o papel de um usuário (ex: VIEWER → ADMIN ou rebaixamento), a mudança só terá efeito na próxima vez que o usuário fizer login (após expiração do token em 8 horas).
+
+**Impacto:** Em caso de rebaixamento urgente ou desativação de acesso, a única garantia imediata é remover o usuário do banco (`DELETE FROM "User" WHERE id = $1`) — alterar o papel não é suficiente sem forçar o logout.
+
+**Mitigação futura:** Implementar lista negra de tokens JWT (via banco ou Redis) ou usar sessões de banco em vez de JWT, permitindo invalidação imediata.
+
+---
+
+### SEC-022 — Chamadas de webhook não registradas no sistema de auditoria
+**Severidade:** ℹ️ INFO — 🔴 ABERTO  
+**Categoria:** Rastreabilidade
+
+As rotas `GET /api/links/:id/up` e `GET /api/links/:id/down` (já documentadas em SEC-016) não são registradas no `AuditLog`. Com o sistema de auditoria agora em produção, eventos de mudança de status de link via webhook perdem rastreabilidade de IP e frequência.
+
+**Mitigação futura:** Adicionar `writeAudit({ action: "UPDATE", entity: "Link", entityId, entityName, ipAddress, details: { event: "up"|"down", source: "webhook" } })` em ambas as rotas webhook.
+
+---
+
 ## Plano de Mitigação — Itens Abertos
 
 | # | Item | Severidade | Esforço | Prioridade |
 |---|------|-----------|---------|-----------|
 | SEC-005 | Configurar TLS/HTTPS via reverse proxy | 🟡 Médio | Infra (1h) | Alta |
 | SEC-006 | Permissões do banco / credenciais mínimas | 🔵 Baixo | Infra (30min) | Média |
-| SEC-007 | Auditoria de ações administrativas | 🔵 Baixo | Código (1 dia) | Média |
 | SEC-008 | Sempre usar container Docker em produção | 🔵 Baixo | Infra (0) | Baixa |
-| SEC-011 | Session maxAge de 8h | ℹ️ Info | Código (5min) | Baixa |
+| SEC-021 | Invalidação imediata de papel JWT | ℹ️ Info | Código (4h) | Média |
+| SEC-022 | Auditar chamadas de webhook no AuditLog | ℹ️ Info | Código (30min) | Média |
 | SEC-012 | Limite de tamanho de requisição | ℹ️ Info | Código (15min) | Baixa |
 | SEC-014 | Rate limiter persistente (Redis/banco) | ℹ️ Info | Código (4h) | Baixa |
 | SEC-017 | Testes para startScheduler | ℹ️ Info | Código (2h) | Baixa |

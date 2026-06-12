@@ -10,10 +10,12 @@ const CSV_HEADERS = ["id", "timestamp", "username", "ipAddress", "action", "enti
 function csvEscape(value: unknown): string {
   if (value == null) return "";
   const str = typeof value === "object" ? JSON.stringify(value) : String(value);
-  if (str.includes('"') || str.includes(",") || str.includes("\n")) {
-    return `"${str.replace(/"/g, '""')}"`;
+  // Prevent spreadsheet formula injection (OWASP CSV injection)
+  const safe = /^[=+\-@\t\r]/.test(str) ? `'${str}` : str;
+  if (safe !== str || safe.includes('"') || safe.includes(",") || safe.includes("\n")) {
+    return `"${safe.replace(/"/g, '""')}"`;
   }
-  return str;
+  return safe;
 }
 
 export async function GET(req: NextRequest) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/with-auth";
+import { requireRole } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { bulkDeviceSchema } from "@/lib/schemas/device";
 import { encrypt } from "@/lib/crypto";
@@ -22,7 +22,7 @@ function intToIp(n: number): string {
 }
 
 export async function POST(req: NextRequest) {
-  const unauth = await requireAuth();
+  const unauth = await requireRole("OPERADOR");
   if (unauth) return unauth;
   const body = await parseAndValidate(req, bulkDeviceSchema);
   if (!body.ok) return body.response;
