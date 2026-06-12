@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
-import { formatUptime, formatResponseTime, formatPercent } from "@/lib/format";
+import { formatUptime, formatResponseTime, formatPercent, fmtTime } from "@/lib/format";
 import { DEVICE_TYPE_ICON, DEVICE_TYPE_LABEL } from "@/lib/device-constants";
 import { MapPin, Users } from "lucide-react";
 import type { Device, DeviceStatus } from "@prisma/client";
@@ -172,11 +172,7 @@ export function DeviceCard({ device }: { device: DeviceWithStatus }) {
               {status.checkedAt && (
                 <p className="text-[10px] text-muted-foreground/60 pt-0.5" suppressHydrationWarning>
                   Verificado às{" "}
-                  {new Date(status.checkedAt).toLocaleTimeString("pt-BR", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
-                  })}
+                  {fmtTime(status.checkedAt, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                 </p>
               )}
             </div>

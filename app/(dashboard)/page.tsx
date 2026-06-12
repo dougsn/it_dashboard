@@ -18,7 +18,7 @@ import {
 import Link from "next/link";
 import { PingSparkline } from "@/components/ping-sparkline";
 import { DEVICE_TYPE_ICON, DEVICE_TYPE_ICON_BG, DEVICE_TYPE_LABEL } from "@/lib/device-constants";
-import { formatBps, timeAgo } from "@/lib/format";
+import { formatBps, timeAgo, fmtTime } from "@/lib/format";
 import { BandwidthCell } from "@/components/bandwidth-cell";
 import { FilterChip } from "@/components/filter-chip";
 import type { Device, DeviceStatus, DeviceType } from "@prisma/client";
@@ -332,7 +332,7 @@ const ENTITY_LABEL: Record<TimelineEvent["entityType"], string> = {
 function IncidentTimelineRow({ ev }: { ev: TimelineEvent }) {
   const EIcon = ENTITY_ICON[ev.entityType];
   const ts = new Date(ev.timestamp);
-  const hhmm = ts.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const hhmm = fmtTime(ts, { hour: "2-digit", minute: "2-digit" });
 
   return (
     <div className="flex items-start gap-3 px-5 py-3.5 border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors">
@@ -443,7 +443,7 @@ export default function OverviewPage() {
   return (
     <>
       <Topbar title="Visão Geral" icon={LayoutDashboard}
-        subtitle={lastUpdated ? `Atualizado às ${lastUpdated.toLocaleTimeString("pt-BR")}` : undefined}
+        subtitle={lastUpdated ? `Atualizado às ${fmtTime(lastUpdated)}` : undefined}
         live={!loading}>
         <button onClick={load}
           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
@@ -510,7 +510,7 @@ export default function OverviewPage() {
                 {lastUpdated && !loading && (
                   <div className="w-full pt-3 border-t border-border/60 flex items-center justify-between text-xs text-muted-foreground">
                     <span>Última verificação</span>
-                    <span className="font-mono font-semibold text-foreground">{lastUpdated.toLocaleTimeString("pt-BR")}</span>
+                    <span className="font-mono font-semibold text-foreground">{fmtTime(lastUpdated)}</span>
                   </div>
                 )}
               </CardContent>

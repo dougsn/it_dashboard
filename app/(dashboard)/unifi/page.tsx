@@ -6,7 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Topbar } from "@/components/topbar";
 import { StatusBadge } from "@/components/status-badge";
-import { formatUptime, formatBps, timeAgo } from "@/lib/format";
+import { formatUptime, formatBps, timeAgo, fmtDateTime } from "@/lib/format";
 import {
   Wifi, Users, Cpu, MemoryStick, Clock, ArrowDownToLine, ArrowUpFromLine,
   ChevronDown, ChevronUp, AlertTriangle, Radio, ExternalLink, ArrowUpDown, RefreshCw,
@@ -302,7 +302,7 @@ function APCard({ device }: { device: UnifiDevice }) {
                       {isInformApi && <td className="px-4 py-2 text-muted-foreground">{c.ssid ?? "—"}</td>}
                       {isInformApi && (
                         <td className="px-4 py-2 font-mono text-muted-foreground">
-                          {c.connectedAt ? new Date(c.connectedAt).toLocaleString("pt-BR") : "—"}
+                          {c.connectedAt ? fmtDateTime(c.connectedAt) : "—"}
                         </td>
                       )}
                     </tr>

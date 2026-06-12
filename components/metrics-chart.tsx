@@ -10,6 +10,7 @@ import {
   Tooltip,
 } from "recharts";
 import type { StatusHistory } from "@prisma/client";
+import { fmtTime } from "@/lib/format";
 
 interface MetricsChartProps {
   history: StatusHistory[];
@@ -27,10 +28,7 @@ export function MetricsChart({
   unit = "",
 }: MetricsChartProps) {
   const data = history.map((h) => ({
-    time: new Date(h.timestamp).toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
+    time: fmtTime(h.timestamp, { hour: "2-digit", minute: "2-digit" }),
     value: (h[metric] as number | null) ?? null,
   }));
 

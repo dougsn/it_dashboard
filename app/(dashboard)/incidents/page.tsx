@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, CheckCircle2, Clock, Wifi, WifiOff } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { DEVICE_TYPE_ICON } from "@/lib/device-constants";
-import { formatDuration, timeAgo } from "@/lib/format";
+import { formatDuration, timeAgo, fmtTime, fmtDate } from "@/lib/format";
 import { FilterChip } from "@/components/filter-chip";
 import type { DeviceType } from "@prisma/client";
 import type { Incident, PaginatedIncidentsResponse } from "@/app/api/incidents/route";
@@ -33,11 +33,7 @@ function severityColor(durationMs: number | null, resolved: boolean) {
 function groupByDay(incidents: Incident[]) {
   const groups: Map<string, Incident[]> = new Map();
   for (const inc of incidents) {
-    const day = new Date(inc.startAt).toLocaleDateString("pt-BR", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-    });
+    const day = fmtDate(inc.startAt, { weekday: "long", day: "numeric", month: "long" });
     if (!groups.has(day)) groups.set(day, []);
     groups.get(day)!.push(inc);
   }
@@ -220,10 +216,7 @@ export default function IncidentsPage() {
                           <div className="flex items-center gap-2 flex-wrap mt-0.5">
                             <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
                               <Clock className="h-2.5 w-2.5" />
-                              {new Date(inc.startAt).toLocaleTimeString("pt-BR", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
+                              {fmtTime(inc.startAt, { hour: "2-digit", minute: "2-digit" })}
                             </span>
                             <span className="text-muted-foreground/40 text-[10px]">·</span>
                             <span className="text-[10px] text-muted-foreground">

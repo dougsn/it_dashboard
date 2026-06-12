@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/status-badge";
 import { Copy, Check, Activity, Clock, AlertTriangle, ArrowDown, ArrowUp, MapPin, Play, Square, Loader2 } from "lucide-react";
 import { Topbar } from "@/components/topbar";
-import { formatBps, formatDuration } from "@/lib/format";
+import { formatBps, formatDuration, fmtTime, fmtDateTime } from "@/lib/format";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -60,18 +60,18 @@ function buildChartData(events: LinkEvent[], lastBefore: LinkEvent | null, since
   const points: { time: string; status: number; label: string }[] = [];
 
   function fmt(ms: number) {
-    return new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    return fmtTime(ms, { hour: "2-digit", minute: "2-digit" });
   }
 
-  points.push({ time: fmt(sinceMs), status: state, label: new Date(sinceMs).toLocaleString("pt-BR") });
+  points.push({ time: fmt(sinceMs), status: state, label: fmtDateTime(sinceMs) });
 
   for (const ev of events) {
     const ts = new Date(ev.timestamp).getTime();
     state = ev.type === "UP" ? 1 : 0;
-    points.push({ time: fmt(ts), status: state, label: new Date(ts).toLocaleString("pt-BR") });
+    points.push({ time: fmt(ts), status: state, label: fmtDateTime(ts) });
   }
 
-  points.push({ time: fmt(now), status: state, label: new Date(now).toLocaleString("pt-BR") });
+  points.push({ time: fmt(now), status: state, label: fmtDateTime(now) });
 
   return points;
 }
@@ -402,7 +402,7 @@ export default function LinkDetailPage({ params }: { params: Promise<{ id: strin
                     <div className="absolute bottom-1 right-2 flex items-center gap-3 text-[9px] text-muted-foreground">
                       <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-success inline-block rounded" />DL</span>
                       <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-primary inline-block rounded" />UL</span>
-                      <span className="font-mono opacity-60">{new Date(last.timestamp).toLocaleTimeString("pt-BR")}</span>
+                      <span className="font-mono opacity-60">{fmtTime(last.timestamp)}</span>
                     </div>
                   </div>
                 </div>
@@ -566,7 +566,7 @@ export default function LinkDetailPage({ params }: { params: Promise<{ id: strin
                   return (
                     <tr key={ev.id} className="hover:bg-muted/10">
                       <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">
-                        {new Date(ev.timestamp).toLocaleString("pt-BR")}
+                        {fmtDateTime(ev.timestamp)}
                       </td>
                       <td className="px-4 py-2.5">
                         <Badge variant={ev.type === "UP" ? "default" : "destructive"}>
