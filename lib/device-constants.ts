@@ -1,4 +1,4 @@
-import { Router, HardDrive, Camera, Box, Wifi } from "lucide-react";
+import { Router, HardDrive, Camera, Box, Wifi, RadioTower } from "lucide-react";
 import type { DeviceType } from "@prisma/client";
 
 export const DEVICE_TYPE_ICON: Record<DeviceType, React.ElementType> = {
@@ -7,6 +7,7 @@ export const DEVICE_TYPE_ICON: Record<DeviceType, React.ElementType> = {
   CAMERA:   Camera,
   OTHER:    Box,
   UNIFI_AP: Wifi,
+  OMADA_AP: RadioTower,
 };
 
 export const DEVICE_TYPE_LABEL: Record<DeviceType, string> = {
@@ -15,6 +16,7 @@ export const DEVICE_TYPE_LABEL: Record<DeviceType, string> = {
   CAMERA:   "Câmera",
   OTHER:    "Outro",
   UNIFI_AP: "UniFi AP",
+  OMADA_AP: "Omada AP",
 };
 
 export const DEVICE_TYPE_ICON_BG: Record<DeviceType, string> = {
@@ -23,4 +25,5 @@ export const DEVICE_TYPE_ICON_BG: Record<DeviceType, string> = {
   CAMERA:   "bg-destructive/10 text-destructive",
   OTHER:    "bg-muted text-muted-foreground",
   UNIFI_AP: "bg-sky-500/10 text-sky-500",
+  OMADA_AP: "bg-orange-500/10 text-orange-500",
 };

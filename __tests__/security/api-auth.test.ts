@@ -11,6 +11,7 @@ import {
   DELETE as deviceIdDELETE,
 } from "@/app/api/devices/[id]/route";
 import { GET as statusGET } from "@/app/api/status/[deviceId]/route";
+import { POST as testOmadaPOST } from "@/app/api/devices/test-omada/route";
 import { NextRequest } from "next/server";
 
 jest.mock("@/lib/auth", () => ({
@@ -24,6 +25,9 @@ jest.mock("@/lib/db", () => ({
     note: { findMany: jest.fn(), create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), delete: jest.fn() },
   },
 }));
+
+jest.mock("https", () => ({ request: jest.fn() }));
+jest.mock("http",  () => ({ request: jest.fn() }));
 
 const FAKE_PARAMS_ID = Promise.resolve({ id: "device-1" });
 const FAKE_PARAMS_STATUS = Promise.resolve({ deviceId: "device-1" });
@@ -69,6 +73,15 @@ describe("Route authentication enforcement", () => {
   it("GET /api/status/:deviceId → 401 without session", async () => {
     const req = new NextRequest("http://localhost/api/status/device-1");
     const res = await statusGET(req, { params: FAKE_PARAMS_STATUS });
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /api/devices/test-omada → 401 without session", async () => {
+    const req = new NextRequest("http://localhost/api/devices/test-omada", {
+      method: "POST",
+      body: JSON.stringify({ controllerIp: "192.168.1.1", port: 8043, site: "Default", tlsVerify: false }),
+    });
+    const res = await testOmadaPOST(req);
     expect(res.status).toBe(401);
   });
 });

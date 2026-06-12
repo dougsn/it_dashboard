@@ -36,14 +36,16 @@ export async function PUT(
   const body = await parseAndValidate(req, updateSchema);
   if (!body.ok) return body.response;
 
-  const { routerosUser, routerosPass, unifiApiKey, unifiUser, unifiPass, ...rest } = body.data;
+  const { routerosUser, routerosPass, unifiApiKey, unifiUser, unifiPass, omadaClientId, omadaClientSecret, ...rest } = body.data;
 
   const credentialUpdate: {
-    routerosUserEnc?: string | null;
-    routerosPassEnc?: string | null;
-    unifiApiKeyEnc?: string | null;
-    unifiUserEnc?: string | null;
-    unifiPassEnc?: string | null;
+    routerosUserEnc?:     string | null;
+    routerosPassEnc?:     string | null;
+    unifiApiKeyEnc?:      string | null;
+    unifiUserEnc?:        string | null;
+    unifiPassEnc?:        string | null;
+    omadaClientIdEnc?:    string | null;
+    omadaClientSecretEnc?: string | null;
   } = {};
   if (routerosUser !== undefined) {
     credentialUpdate.routerosUserEnc = routerosUser ? encrypt(routerosUser) : null;
@@ -59,6 +61,12 @@ export async function PUT(
   }
   if (unifiPass !== undefined) {
     credentialUpdate.unifiPassEnc = unifiPass ? encrypt(unifiPass) : null;
+  }
+  if (omadaClientId !== undefined) {
+    credentialUpdate.omadaClientIdEnc = omadaClientId ? encrypt(omadaClientId) : null;
+  }
+  if (omadaClientSecret !== undefined) {
+    credentialUpdate.omadaClientSecretEnc = omadaClientSecret ? encrypt(omadaClientSecret) : null;
   }
 
   try {

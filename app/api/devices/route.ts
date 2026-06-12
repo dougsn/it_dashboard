@@ -7,7 +7,7 @@ import { encrypt } from "@/lib/crypto";
 import { parseAndValidate } from "@/lib/parse-body";
 import { sanitizeDevice } from "@/lib/device-utils";
 
-const deviceTypeSchema = z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER", "UNIFI_AP"]);
+const deviceTypeSchema = z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER", "UNIFI_AP", "OMADA_AP"]);
 
 export async function GET(req: NextRequest) {
   const unauth = await requireAuth();
@@ -37,16 +37,18 @@ export async function POST(req: NextRequest) {
   const body = await parseAndValidate(req, deviceConfigSchema);
   if (!body.ok) return body.response;
 
-  const { routerosUser, routerosPass, unifiApiKey, unifiUser, unifiPass, ...rest } = body.data;
+  const { routerosUser, routerosPass, unifiApiKey, unifiUser, unifiPass, omadaClientId, omadaClientSecret, ...rest } = body.data;
 
   const device = await db.device.create({
     data: {
       ...rest,
-      routerosUserEnc: routerosUser ? encrypt(routerosUser) : null,
-      routerosPassEnc: routerosPass ? encrypt(routerosPass) : null,
-      unifiApiKeyEnc: unifiApiKey ? encrypt(unifiApiKey) : null,
-      unifiUserEnc: unifiUser ? encrypt(unifiUser) : null,
-      unifiPassEnc: unifiPass ? encrypt(unifiPass) : null,
+      routerosUserEnc:     routerosUser     ? encrypt(routerosUser)     : null,
+      routerosPassEnc:     routerosPass     ? encrypt(routerosPass)     : null,
+      unifiApiKeyEnc:      unifiApiKey      ? encrypt(unifiApiKey)      : null,
+      unifiUserEnc:        unifiUser        ? encrypt(unifiUser)        : null,
+      unifiPassEnc:        unifiPass        ? encrypt(unifiPass)        : null,
+      omadaClientIdEnc:    omadaClientId    ? encrypt(omadaClientId)    : null,
+      omadaClientSecretEnc: omadaClientSecret ? encrypt(omadaClientSecret) : null,
     },
   });
 

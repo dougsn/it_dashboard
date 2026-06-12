@@ -13,6 +13,7 @@ enum DeviceType {
   CAMERA
   OTHER
   UNIFI_AP
+  OMADA_AP
 }
 
 model Device {
@@ -47,6 +48,15 @@ model Device {
   unifiTlsVerify    Boolean @default(true)
   unifiControllerIp String? // null = usar o próprio IP do dispositivo (UDM/standalone)
 
+  omadaEnabled         Boolean @default(false)
+  omadaClientIdEnc     String? // AES-256-GCM encrypted OAuth2 client_id
+  omadaClientSecretEnc String? // AES-256-GCM encrypted OAuth2 client_secret
+  omadacId             String? // Omada Controller omadacId (descoberto via API)
+  omadaSite            String? // nome do site (display)
+  omadaSiteId          String? // ID do site na API (lookup direto, sem iterar sites)
+  omadaTlsVerify       Boolean @default(true)
+  omadaControllerIp    String? // IP do Omada Controller
+
   checkInterval Int @default(60)
 
   createdAt DateTime @default(now())
@@ -71,6 +81,8 @@ model DeviceStatus {
   memoryUsed Float?
   unifiData  Json?
   unifiError String?
+  omadaData  Json?
+  omadaError String?
 
   checkedAt DateTime @default(now())
 }

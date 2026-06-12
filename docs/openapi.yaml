@@ -61,7 +61,7 @@ components:
     # ── Enums ──────────────────────────────────────────────────────────────
     DeviceType:
       type: string
-      enum: [MIKROTIK, DVR, CAMERA, OTHER, UNIFI_AP]
+      enum: [MIKROTIK, DVR, CAMERA, OTHER, UNIFI_AP, OMADA_AP]
       description: Tipo do dispositivo.
 
     NoteSeverity:
@@ -223,6 +223,49 @@ components:
           nullable: true
           default: false
           description: Se deve validar o certificado TLS do controlador (desabilite para certificados autoassinados).
+        omadaEnabled:
+          type: boolean
+          default: false
+          description: Se o monitoramento Omada está habilitado (apenas para tipo OMADA_AP).
+        omadaClientId:
+          type: string
+          nullable: true
+          writeOnly: true
+          description: OAuth2 client_id da Northbound API do Omada (nunca retornado na leitura).
+        omadaClientSecret:
+          type: string
+          nullable: true
+          writeOnly: true
+          description: OAuth2 client_secret da Northbound API do Omada (nunca retornado na leitura).
+        hasOmadaCredentials:
+          type: boolean
+          readOnly: true
+          description: Indica se credenciais Omada estão armazenadas (substitui os campos de credencial na leitura).
+        omadacId:
+          type: string
+          nullable: true
+          description: omadacId do controller Omada (descoberto via API de sites).
+          example: "abc123def456"
+        omadaSite:
+          type: string
+          nullable: true
+          description: Nome do site Omada (apenas para exibição).
+          example: "Sede"
+        omadaSiteId:
+          type: string
+          nullable: true
+          description: ID do site Omada (usado diretamente nas chamadas de API).
+          example: "site-abc123"
+        omadaControllerIp:
+          type: string
+          nullable: true
+          format: ipv4
+          example: "10.0.0.19"
+          description: IP do Omada Controller (quando diferente do IP do AP).
+        omadaTlsVerify:
+          type: boolean
+          default: true
+          description: Se deve validar o certificado TLS do controller (desabilite para certificados autoassinados).
         checkInterval:
           type: integer
           description: Intervalo entre checagens em segundos (mínimo 10, máximo 3600).
@@ -284,6 +327,10 @@ components:
           $ref: "#/components/schemas/UnifiResult"
           nullable: true
           description: Dados do AP UniFi (presente apenas para dispositivos do tipo UNIFI_AP).
+        omadaData:
+          $ref: "#/components/schemas/OmadaResult"
+          nullable: true
+          description: Dados do AP Omada (presente apenas para dispositivos do tipo OMADA_AP).
       required: [id, deviceId, isOnline, checkedAt]
 
     UnifiSSID:
@@ -415,6 +462,143 @@ components:
             Campos signal e ssid são nulos quando autenticado via Integration API (apikey).
           items:
             $ref: "#/components/schemas/UnifiClient"
+      required: [totalClients, ssids, clients]
+
+    OmadaSSID:
+      type: object
+      description: Rede Wi-Fi ativa em um AP Omada, derivada dos clientes conectados.
+      properties:
+        ssid:
+          type: string
+          example: "Grupo Immuno"
+        band:
+          type: string
+          description: Banda(s) de rádio em uso. Multi-banda separado por " / ".
+          example: "2.4 GHz / 5 GHz"
+        channel:
+          type: string
+          nullable: true
+          description: Canal(is) em uso. Multi-banda separado por " / " (ex. "6 / 149"). Null se sem dados.
+          example: "6 / 149"
+        clients:
+          type: integer
+          description: Clientes conectados neste SSID.
+          example: 5
+      required: [ssid, band, clients]
+
+    OmadaClient:
+      type: object
+      description: Cliente Wi-Fi conectado a um AP Omada.
+      properties:
+        id:
+          type: string
+          description: MAC address do cliente (usado como ID único).
+        name:
+          type: string
+          description: Hostname do cliente ou MAC se hostname não estiver disponível.
+          example: "iPhone-de-João"
+        mac:
+          type: string
+          example: "98:e5:5b:95:b3:0c"
+        ip:
+          type: string
+          nullable: true
+          format: ipv4
+          example: "10.0.0.60"
+        signal:
+          type: integer
+          nullable: true
+          description: Intensidade do sinal em dBm. > -60 bom, -60 a -80 aceitável, < -80 fraco.
+          example: -46
+        snr:
+          type: integer
+          nullable: true
+          description: Signal-to-Noise Ratio em dB.
+          example: 49
+        ssid:
+          type: string
+          nullable: true
+          example: "Grupo Immuno"
+        band:
+          type: string
+          nullable: true
+          description: Banda de rádio do cliente (2.4 GHz, 5 GHz, 6 GHz).
+          example: "5 GHz"
+        wifiMode:
+          type: integer
+          nullable: true
+          description: |
+            Geração Wi-Fi do cliente.
+            - 4 = Wi-Fi 4 (802.11n)
+            - 5 = Wi-Fi 5 (802.11ac)
+            - 6 = Wi-Fi 6 (802.11ax)
+          example: 5
+        uptime:
+          type: integer
+          nullable: true
+          description: Tempo em segundos que o cliente está conectado a este AP.
+          example: 3600
+      required: [id, name, mac]
+
+    OmadaResult:
+      type: object
+      description: Resultado da checagem do AP Omada via Northbound API — modelo, recursos e clientes conectados.
+      properties:
+        model:
+          type: string
+          nullable: true
+          description: "Modelo do AP (ex: EAP670, EAP225)."
+          example: "EAP225"
+        firmware:
+          type: string
+          nullable: true
+          description: Versão do firmware instalado.
+          example: "5.2.2 Build 20250709"
+        uptime:
+          type: integer
+          nullable: true
+          description: Tempo em segundos desde o último reinício do AP.
+          example: 86400
+        cpuLoad:
+          type: number
+          format: float
+          nullable: true
+          description: Uso de CPU em percentual (0–100).
+          example: 3.0
+        memoryUsed:
+          type: number
+          format: float
+          nullable: true
+          description: Uso de memória em percentual (0–100).
+          example: 58.0
+        uplinkTxBps:
+          type: integer
+          nullable: true
+          description: |
+            Taxa de uplink (AP → controller) em bits/segundo.
+            Derivada da soma de `txRate` dos clientes conectados.
+          example: 1000000
+        uplinkRxBps:
+          type: integer
+          nullable: true
+          description: |
+            Taxa de downlink (AP → clientes) em bits/segundo.
+            Derivada da soma de `rxRate` dos clientes conectados.
+          example: 2000000
+        totalClients:
+          type: integer
+          description: Total de clientes associados a este AP.
+          example: 8
+        ssids:
+          type: array
+          description: Redes Wi-Fi ativas, derivadas dos clientes conectados (não da config estática do controller).
+          items:
+            $ref: "#/components/schemas/OmadaSSID"
+        clients:
+          type: array
+          description: Lista de clientes associados ao AP.
+          items:
+            $ref: "#/components/schemas/OmadaClient"
       required: [totalClients, ssids, clients]
 
     StatusHistoryEntry:
@@ -1547,6 +1731,103 @@ paths:
           description: Token inválido ou ausente.
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /api/devices/test-omada:
+    post:
+      tags: [Dispositivos]
+      summary: Testar conexão Omada e listar sites
+      description: |
+        Valida as credenciais OAuth2 da Northbound API do Omada Controller e retorna a lista de
+        sites disponíveis. Use antes de salvar um OMADA_AP para confirmar o `omadacId` e selecionar
+        o `omadaSiteId` correto.
+
+        **Resolução de credenciais:**
+        - Se `omadaClientId` e `omadaClientSecret` forem enviados, são usados diretamente.
+        - Se omitidos mas `deviceId` for fornecido, as credenciais são lidas do banco (descriptografadas).
+        - Se nenhuma credencial estiver disponível, retorna 422.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [controllerIp, omadacId, tlsVerify]
+              properties:
+                controllerIp:
+                  type: string
+                  format: ipv4
+                  description: IP do Omada Controller.
+                  example: "10.0.0.19"
+                omadacId:
+                  type: string
+                  description: omadacId do controller (visível na URL do painel Omada).
+                  example: "abc123def456"
+                tlsVerify:
+                  type: boolean
+                  description: Se deve validar o certificado TLS (false para certificados autoassinados).
+                  example: false
+                omadaClientId:
+                  type: string
+                  description: OAuth2 client_id (opcional se deviceId for fornecido).
+                omadaClientSecret:
+                  type: string
+                  description: OAuth2 client_secret (opcional se deviceId for fornecido).
+                deviceId:
+                  type: string
+                  description: ID de um OMADA_AP existente para reutilizar as credenciais armazenadas.
+      responses:
+        "200":
+          description: Autenticação bem-sucedida. Retorna lista de sites.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  sites:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        siteId:
+                          type: string
+                          example: "site-abc123"
+                        name:
+                          type: string
+                          example: "Sede"
+                  message:
+                    type: string
+                    example: "Autenticado. 2 site(s) disponível(is)."
+        "400":
+          description: Parâmetros inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: |
+            Credenciais ausentes ou falha na conexão/autenticação com o controller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                sem_credenciais:
+                  summary: Credenciais não fornecidas
+                  value:
+                    error: "Informe client_id e client_secret para testar a conexão"
+                auth_falhou:
+                  summary: client_id ou client_secret inválidos
+                  value:
+                    error: "client_id ou client_secret inválidos"
+                conexao_falhou:
+                  summary: Controller inacessível
+                  value:
+                    error: "Timeout ao conectar a 10.0.0.19"
 
   /api/links/test-traffic:
     post:

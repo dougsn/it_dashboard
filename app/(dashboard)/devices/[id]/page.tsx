@@ -65,6 +65,39 @@ interface UnifiData {
   clients: UnifiClient[];
 }
 
+interface OmadaSSID {
+  ssid: string;
+  band: string;
+  channel: string | null;
+  clients: number;
+}
+
+interface OmadaClient {
+  id: string;
+  name: string;
+  mac: string;
+  ip: string | null;
+  signal: number | null;
+  snr: number | null;
+  ssid: string | null;
+  band: string | null;
+  wifiMode: number | null;
+  uptime: number | null;
+}
+
+interface OmadaData {
+  model: string | null;
+  firmware: string | null;
+  uptime: number | null;
+  cpuLoad: number | null;
+  memoryUsed: number | null;
+  uplinkTxBps: number | null;
+  uplinkRxBps: number | null;
+  totalClients: number;
+  ssids: OmadaSSID[];
+  clients: OmadaClient[];
+}
+
 type DeviceWithStatus = Device & { currentStatus: DeviceStatus | null };
 
 const HOUR_OPTIONS = [
@@ -75,7 +108,7 @@ const HOUR_OPTIONS = [
 ] as const;
 type HourOption = typeof HOUR_OPTIONS[number]["value"];
 
-type ClientSortKey = "name" | "ip" | "connectedAt" | "signal";
+type ClientSortKey = "name" | "ip" | "connectedAt" | "signal" | "band" | "uptime";
 
 function formatBps(bps: number | null): string {
   if (bps == null) return "—";
@@ -105,7 +138,7 @@ export default function DeviceDetailPage({
   const [loading, setLoading] = useState(true);
   const [hours, setHours] = useState<HourOption>(24);
   const [clientsExpanded, setClientsExpanded] = useState(false);
-  const [clientSort, setClientSort] = useState<ClientSortKey>("connectedAt");
+  const [clientSort, setClientSort] = useState<ClientSortKey>("signal");
   const [historyExpanded, setHistoryExpanded] = useState(false);
 
   const load = useCallback(async (h: number) => {
@@ -161,18 +194,22 @@ export default function DeviceDetailPage({
   if (!device) return <div className="p-7"><p className="text-muted-foreground">Dispositivo não encontrado.</p></div>;
 
   const status = device.currentStatus;
-  const hasSystemMetrics = device.snmpEnabled || device.routerosEnabled || device.unifiEnabled;
+  const hasSystemMetrics = device.snmpEnabled || device.routerosEnabled || device.unifiEnabled || (device as Device & { omadaEnabled?: boolean }).omadaEnabled;
   const unifiData = (status?.unifiData ?? null) as UnifiData | null;
   const unifiError = device.unifiEnabled ? (status?.unifiError ?? null) : null;
   const isInformApi = (device as Device & { unifiAuthMethod?: string }).unifiAuthMethod === "userpass";
+  const omadaData = ((status as (typeof status & { omadaData?: unknown }))?.omadaData ?? null) as OmadaData | null;
+  const omadaError = (device as Device & { omadaEnabled?: boolean }).omadaEnabled ? ((status as (typeof status & { omadaError?: string }))?.omadaError ?? null) : null;
 
-  // Build sorted client list
-  const sortedClients = [...(unifiData?.clients ?? [])].sort((a, b) => {
+  // Build sorted client list (UniFi or Omada)
+  const activeClients = unifiData?.clients ?? omadaData?.clients ?? [];
+  const sortedClients = [...activeClients].sort((a, b) => {
     if (clientSort === "name") return a.name.localeCompare(b.name);
     if (clientSort === "ip") return (a.ip ?? "").localeCompare(b.ip ?? "");
-    if (clientSort === "signal") return (b.signal ?? -200) - (a.signal ?? -200); // strongest first
-    // connectedAt: most recent first
-    return new Date(b.connectedAt ?? 0).getTime() - new Date(a.connectedAt ?? 0).getTime();
+    if (clientSort === "band") return ((a as OmadaClient).band ?? "").localeCompare((b as OmadaClient).band ?? "");
+    if (clientSort === "uptime") return ((b as OmadaClient).uptime ?? 0) - ((a as OmadaClient).uptime ?? 0);
+    if (clientSort === "connectedAt") return new Date((b as UnifiClient).connectedAt ?? 0).getTime() - new Date((a as UnifiClient).connectedAt ?? 0).getTime();
+    return (b.signal ?? -200) - (a.signal ?? -200); // strongest first (default)
   });
 
   const reversedHistory = [...history].reverse();
@@ -269,31 +306,34 @@ export default function DeviceDetailPage({
           />
         </div>
 
-        {/* Row 2 (UniFi only): bandwidth + clients + http */}
-        {(unifiData != null || status?.httpOk != null) && (
+        {/* Row 2 (UniFi/Omada): bandwidth + clients + http */}
+        {(unifiData != null || omadaData != null || status?.httpOk != null) && (
           <div className="grid grid-cols-4 gap-3">
-            {unifiData != null && (
-              <>
-                <MetricCard
-                  icon={ArrowDownToLine}
-                  label="Downlink"
-                  value={formatBps(unifiData.uplinkRxBps)}
-                  color="text-[var(--chart-2)]"
-                />
-                <MetricCard
-                  icon={ArrowUpFromLine}
-                  label="Uplink"
-                  value={formatBps(unifiData.uplinkTxBps)}
-                  color="text-[var(--chart-3)]"
-                />
-                <MetricCard
-                  icon={Users}
-                  label="Clientes"
-                  value={String(unifiData.totalClients)}
-                  color="text-[var(--chart-5)]"
-                />
-              </>
-            )}
+            {(unifiData ?? omadaData) != null && (() => {
+              const apData = unifiData ?? omadaData!;
+              return (
+                <>
+                  <MetricCard
+                    icon={ArrowDownToLine}
+                    label="Downlink"
+                    value={formatBps(apData.uplinkRxBps)}
+                    color="text-[var(--chart-2)]"
+                  />
+                  <MetricCard
+                    icon={ArrowUpFromLine}
+                    label="Uplink"
+                    value={formatBps(apData.uplinkTxBps)}
+                    color="text-[var(--chart-3)]"
+                  />
+                  <MetricCard
+                    icon={Users}
+                    label="Clientes"
+                    value={String(apData.totalClients)}
+                    color="text-[var(--chart-5)]"
+                  />
+                </>
+              );
+            })()}
             {status?.httpOk != null && (
               <MetricCard
                 icon={Globe}
@@ -305,22 +345,25 @@ export default function DeviceDetailPage({
           </div>
         )}
 
-        {/* UniFi hardware badges */}
-        {unifiData && (unifiData.model || unifiData.firmware) && (
-          <div className="flex flex-wrap gap-2">
-            {unifiData.model && (
-              <Badge variant="outline" className="gap-1 text-xs">
-                <Radio className="h-3 w-3" />
-                {unifiData.model}
-              </Badge>
-            )}
-            {unifiData.firmware && (
-              <Badge variant="outline" className="text-xs text-muted-foreground">
-                fw {unifiData.firmware}
-              </Badge>
-            )}
-          </div>
-        )}
+        {/* AP hardware badges (UniFi or Omada) */}
+        {(unifiData ?? omadaData) && (() => {
+          const apData = unifiData ?? omadaData!;
+          return (apData.model || apData.firmware) ? (
+            <div className="flex flex-wrap gap-2">
+              {apData.model && (
+                <Badge variant="outline" className="gap-1 text-xs">
+                  <Radio className="h-3 w-3" />
+                  {apData.model}
+                </Badge>
+              )}
+              {apData.firmware && (
+                <Badge variant="outline" className="text-xs text-muted-foreground">
+                  fw {apData.firmware}
+                </Badge>
+              )}
+            </div>
+          ) : null;
+        })()}
 
         {/* Protocol badges */}
         <div className="flex flex-wrap gap-2">
@@ -331,6 +374,11 @@ export default function DeviceDetailPage({
           {device.unifiEnabled && (
             <Badge variant="outline" className={unifiError ? "border-destructive text-destructive" : ""}>
               UniFi API
+            </Badge>
+          )}
+          {(device as Device & { omadaEnabled?: boolean }).omadaEnabled && (
+            <Badge variant="outline" className={omadaError ? "border-destructive text-destructive" : ""}>
+              Omada API
             </Badge>
           )}
         </div>
@@ -346,9 +394,20 @@ export default function DeviceDetailPage({
           </div>
         )}
 
+        {/* Omada connection error alert */}
+        {omadaError && (
+          <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3">
+            <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-destructive">Falha na conexão com o controlador Omada</p>
+              <p className="text-xs text-muted-foreground mt-0.5 wrap-break-word">{omadaError}</p>
+            </div>
+          </div>
+        )}
+
         {/* Weak signal alert */}
         {(() => {
-          const weakClients = (unifiData?.clients ?? []).filter((c) => c.signal != null && c.signal < -80);
+          const weakClients = [...(unifiData?.clients ?? []), ...(omadaData?.clients ?? [])].filter((c) => c.signal != null && c.signal < -80);
           if (weakClients.length === 0) return null;
           return (
             <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3">
@@ -425,50 +484,56 @@ export default function DeviceDetailPage({
           )}
         </div>
 
-        {/* UniFi SSIDs */}
-        {unifiData && unifiData.ssids.length > 0 && (
-          <div className="space-y-3">
-            <h2 className="font-semibold flex items-center gap-2">
-              <Wifi className="h-4 w-4" />
-              Redes Wi-Fi
-            </h2>
-            <div className="rounded-lg border bg-card overflow-hidden">
-              <table className="w-full text-xs">
-                <thead className="bg-muted/40 border-b">
-                  <tr>
-                    <th className="text-left px-4 py-2.5 font-medium">SSID</th>
-                    <th className="text-left px-4 py-2.5 font-medium">Banda</th>
-                    {isInformApi && <th className="text-left px-4 py-2.5 font-medium">Canal</th>}
-                    {isInformApi && <th className="text-right px-4 py-2.5 font-medium">Clientes</th>}
-                    {isInformApi && <th className="text-right px-4 py-2.5 font-medium">RX Total</th>}
-                    {isInformApi && <th className="text-right px-4 py-2.5 font-medium">TX Total</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {unifiData.ssids.map((s, i) => (
-                    <tr key={i} className="hover:bg-muted/10">
-                      <td className="px-4 py-2 font-medium">{s.ssid}</td>
-                      <td className="px-4 py-2">
-                        <Badge variant="secondary" className="text-[10px] font-mono">{s.band}</Badge>
-                      </td>
-                      {isInformApi && (
-                        <td className="px-4 py-2 font-mono text-muted-foreground">
-                          {s.channel > 0 ? `ch ${s.channel}` : "—"}
-                        </td>
-                      )}
-                      {isInformApi && <td className="px-4 py-2 text-right font-mono">{s.clients}</td>}
-                      {isInformApi && <td className="px-4 py-2 text-right font-mono text-muted-foreground">{formatBytes(s.rxBytes)}</td>}
-                      {isInformApi && <td className="px-4 py-2 text-right font-mono text-muted-foreground">{formatBytes(s.txBytes)}</td>}
+        {/* SSIDs (UniFi or Omada) */}
+        {(unifiData ?? omadaData) && (() => {
+          const apData = unifiData ?? omadaData!;
+          const ssids = apData.ssids;
+          if (ssids.length === 0) return null;
+          const showExtended = isInformApi && unifiData != null;
+          return (
+            <div className="space-y-3">
+              <h2 className="font-semibold flex items-center gap-2">
+                <Wifi className="h-4 w-4" />
+                Redes Wi-Fi
+              </h2>
+              <div className="rounded-lg border bg-card overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/40 border-b">
+                    <tr>
+                      <th className="text-left px-4 py-2.5 font-medium">SSID</th>
+                      <th className="text-left px-4 py-2.5 font-medium">Banda</th>
+                      <th className="text-left px-4 py-2.5 font-medium">Canal</th>
+                      <th className="text-right px-4 py-2.5 font-medium">Clientes</th>
+                      {showExtended && <th className="text-right px-4 py-2.5 font-medium">RX Total</th>}
+                      {showExtended && <th className="text-right px-4 py-2.5 font-medium">TX Total</th>}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y">
+                    {ssids.map((s, i) => (
+                      <tr key={i} className="hover:bg-muted/10">
+                        <td className="px-4 py-2 font-medium">{s.ssid}</td>
+                        <td className="px-4 py-2">
+                          <Badge variant="secondary" className="text-[10px] font-mono">{s.band}</Badge>
+                        </td>
+                        <td className="px-4 py-2 font-mono text-muted-foreground">
+                          {omadaData
+                            ? ((s as OmadaSSID).channel ?? "—")
+                            : ((s as UnifiSSID).channel > 0 ? `ch ${(s as UnifiSSID).channel}` : "—")}
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono">{s.clients}</td>
+                        {showExtended && <td className="px-4 py-2 text-right font-mono text-muted-foreground">{formatBytes((s as UnifiSSID).rxBytes)}</td>}
+                        {showExtended && <td className="px-4 py-2 text-right font-mono text-muted-foreground">{formatBytes((s as UnifiSSID).txBytes)}</td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
-        {/* Collapsible client table */}
-        {unifiData && unifiData.clients.length > 0 && (
+        {/* Collapsible client table (UniFi or Omada) */}
+        {activeClients.length > 0 && (
           <div className="space-y-3">
             <button
               onClick={() => setClientsExpanded((v) => !v)}
@@ -477,7 +542,7 @@ export default function DeviceDetailPage({
               <span className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
                 Clientes conectados
-                <Badge variant="secondary" className="text-xs">{unifiData.clients.length}</Badge>
+                <Badge variant="secondary" className="text-xs">{activeClients.length}</Badge>
               </span>
               {clientsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
@@ -492,17 +557,32 @@ export default function DeviceDetailPage({
                       <th className="px-4 py-2.5 text-left">
                         <SortButton col="ip" label="IP" />
                       </th>
-                      {isInformApi && (
-                        <>
-                          <th className="px-4 py-2.5 text-left">
-                            <SortButton col="signal" label="Sinal" />
-                          </th>
-                          <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">SSID</th>
-                        </>
+                      {(isInformApi || omadaData) && (
+                        <th className="px-4 py-2.5 text-left">
+                          <SortButton col="signal" label="Sinal" />
+                        </th>
                       )}
-                      <th className="px-4 py-2.5 text-left">
-                        <SortButton col="connectedAt" label="Conectado em" />
-                      </th>
+                      {(isInformApi || omadaData) && (
+                        <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">SSID</th>
+                      )}
+                      {omadaData && (
+                        <th className="px-4 py-2.5 text-left">
+                          <SortButton col="band" label="Banda" />
+                        </th>
+                      )}
+                      {omadaData && (
+                        <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Wi-Fi</th>
+                      )}
+                      {omadaData && (
+                        <th className="px-4 py-2.5 text-left">
+                          <SortButton col="uptime" label="Conectado há" />
+                        </th>
+                      )}
+                      {isInformApi && (
+                        <th className="px-4 py-2.5 text-left">
+                          <SortButton col="connectedAt" label="Conectado em" />
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -510,17 +590,34 @@ export default function DeviceDetailPage({
                       <tr key={c.id} className="hover:bg-muted/10">
                         <td className="px-4 py-2 font-medium max-w-50 truncate" title={c.name}>{c.name}</td>
                         <td className="px-4 py-2 font-mono text-muted-foreground">{c.ip ?? "—"}</td>
-                        {isInformApi && (
-                          <>
-                            <td className="px-4 py-2 font-mono text-muted-foreground">
-                              {c.signal != null ? <SignalBadge dbm={c.signal} /> : "—"}
-                            </td>
-                            <td className="px-4 py-2 text-muted-foreground">{c.ssid ?? "—"}</td>
-                          </>
+                        {(isInformApi || omadaData) && (
+                          <td className="px-4 py-2">
+                            {c.signal != null
+                              ? <SignalBadge dbm={c.signal} snr={omadaData ? (c as OmadaClient).snr : null} />
+                              : "—"}
+                          </td>
                         )}
-                        <td className="px-4 py-2 font-mono text-muted-foreground">
-                          {c.connectedAt ? new Date(c.connectedAt).toLocaleString("pt-BR") : "—"}
-                        </td>
+                        {(isInformApi || omadaData) && (
+                          <td className="px-4 py-2 text-muted-foreground">{c.ssid ?? "—"}</td>
+                        )}
+                        {omadaData && (
+                          <td className="px-4 py-2 text-muted-foreground">{(c as OmadaClient).band ?? "—"}</td>
+                        )}
+                        {omadaData && (
+                          <td className="px-4 py-2 text-muted-foreground font-mono">
+                            {wifiGenLabel((c as OmadaClient).wifiMode)}
+                          </td>
+                        )}
+                        {omadaData && (
+                          <td className="px-4 py-2 font-mono text-muted-foreground">
+                            {formatUptime((c as OmadaClient).uptime)}
+                          </td>
+                        )}
+                        {isInformApi && (
+                          <td className="px-4 py-2 font-mono text-muted-foreground">
+                            {(c as UnifiClient).connectedAt ? new Date((c as UnifiClient).connectedAt!).toLocaleString("pt-BR") : "—"}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -599,12 +696,23 @@ export default function DeviceDetailPage({
   );
 }
 
-function SignalBadge({ dbm }: { dbm: number }) {
+function SignalBadge({ dbm, snr }: { dbm: number; snr?: number | null }) {
   const color =
     dbm >= -60 ? "text-success" :
     dbm >= -75 ? "text-warning" :
     "text-destructive";
-  return <span className={`font-mono font-semibold ${color}`}>{dbm} dBm</span>;
+  return (
+    <span className="flex flex-col leading-tight">
+      <span className={`font-mono font-semibold ${color}`}>{dbm} dBm</span>
+      {snr != null && <span className="font-mono text-[10px] text-muted-foreground">SNR {snr} dB</span>}
+    </span>
+  );
+}
+
+function wifiGenLabel(mode: number | null): string {
+  if (mode == null) return "—";
+  if (mode >= 4 && mode <= 7) return `Wi-Fi ${mode}`;
+  return "—";
 }
 
 function MetricCard({

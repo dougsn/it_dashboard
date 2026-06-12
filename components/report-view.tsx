@@ -17,6 +17,7 @@ const TYPE_LABEL: Record<DeviceType, string> = {
   CAMERA: "Câmera IP",
   OTHER: "Outro",
   UNIFI_AP: "UniFi Access Point",
+  OMADA_AP: "Omada AP (TP-Link)",
 };
 
 function fmtDate(iso: string) {
@@ -194,6 +195,173 @@ function IncidentsTable({ incidents }: { incidents: DeviceReport["incidents"] })
   );
 }
 
+// ── Omada section ─────────────────────────────────────────────────────────────
+
+interface OmadaData {
+  model?: string | null;
+  firmware?: string | null;
+  uptime?: number | null;
+  cpuLoad?: number | null;
+  memoryUsed?: number | null;
+  uplinkTxBps?: number | null;
+  uplinkRxBps?: number | null;
+  totalClients?: number;
+  ssids?: { ssid: string; band: string; channel: string | null; clients: number }[];
+  clients?: {
+    id: string;
+    name: string;
+    mac: string;
+    ip: string | null;
+    signal: number | null;
+    snr: number | null;
+    ssid: string | null;
+    band: string | null;
+    wifiMode: number | null;
+    uptime: number | null;
+  }[];
+}
+
+function wifiGenLabel(mode: number | null): string {
+  if (mode != null && mode >= 4 && mode <= 7) return `Wi-Fi ${mode}`;
+  return "—";
+}
+
+function fmtUptimeSec(seconds: number | null): string {
+  if (seconds == null) return "—";
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function OmadaSection({ data, showClients }: { data: OmadaData; showClients: boolean }) {
+  return (
+    <div className="space-y-4">
+      {/* Hardware info */}
+      <div className="grid grid-cols-3 gap-3">
+        {data.model && <div className="border rounded-lg p-3 bg-white print:border-gray-300">
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Modelo</p>
+          <p className="font-bold text-gray-900 mt-0.5">{data.model}</p>
+        </div>}
+        {data.firmware && <div className="border rounded-lg p-3 bg-white print:border-gray-300">
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Firmware</p>
+          <p className="font-bold text-gray-900 mt-0.5">{data.firmware}</p>
+        </div>}
+        {data.totalClients != null && <div className="border rounded-lg p-3 bg-white print:border-gray-300">
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Clientes ativos</p>
+          <p className="font-bold text-gray-900 mt-0.5">{data.totalClients}</p>
+        </div>}
+      </div>
+
+      {/* Uplink */}
+      {(data.uplinkTxBps != null || data.uplinkRxBps != null) && (
+        <div className="flex gap-4">
+          {data.uplinkRxBps != null && (
+            <div className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white print:border-gray-300">
+              <ArrowDownToLine className="h-4 w-4 text-blue-500" />
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-semibold">Download</p>
+                <p className="font-bold">{fmtBps(data.uplinkRxBps)}</p>
+              </div>
+            </div>
+          )}
+          {data.uplinkTxBps != null && (
+            <div className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white print:border-gray-300">
+              <ArrowUpFromLine className="h-4 w-4 text-violet-500" />
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-semibold">Upload</p>
+                <p className="font-bold">{fmtBps(data.uplinkTxBps)}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SSIDs */}
+      {data.ssids && data.ssids.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">SSIDs ativos</p>
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-1.5 pr-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">SSID</th>
+                <th className="text-left py-1.5 pr-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Banda</th>
+                <th className="text-left py-1.5 pr-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Canal</th>
+                <th className="text-left py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Clientes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.ssids.map((s, i) => (
+                <tr key={i} className="border-b border-gray-100 last:border-0">
+                  <td className="py-1.5 pr-4 font-semibold flex items-center gap-1.5">
+                    <Wifi className="h-3 w-3 text-orange-500" />{s.ssid}
+                  </td>
+                  <td className="py-1.5 pr-4"><span className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-orange-50 text-orange-700 border border-orange-200">{s.band}</span></td>
+                  <td className="py-1.5 pr-4 font-mono text-xs">{s.channel ?? "—"}</td>
+                  <td className="py-1.5 font-semibold">{s.clients}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Clients — conditionally shown */}
+      {showClients && data.clients && data.clients.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            Clientes conectados ({data.clients.length})
+          </p>
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-1.5 pr-3 font-semibold text-gray-500 uppercase tracking-wide">Nome/MAC</th>
+                <th className="text-left py-1.5 pr-3 font-semibold text-gray-500 uppercase tracking-wide">IP</th>
+                <th className="text-left py-1.5 pr-3 font-semibold text-gray-500 uppercase tracking-wide">SSID / Banda</th>
+                <th className="text-left py-1.5 pr-3 font-semibold text-gray-500 uppercase tracking-wide">Sinal / SNR</th>
+                <th className="text-left py-1.5 pr-3 font-semibold text-gray-500 uppercase tracking-wide">Wi-Fi</th>
+                <th className="text-left py-1.5 font-semibold text-gray-500 uppercase tracking-wide">Conectado há</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.clients.slice(0, 20).map((c) => (
+                <tr key={c.id} className="border-b border-gray-100 last:border-0">
+                  <td className="py-1.5 pr-3">
+                    <p className="font-semibold text-gray-800">{c.name || "—"}</p>
+                    <p className="font-mono text-gray-400">{c.mac}</p>
+                  </td>
+                  <td className="py-1.5 pr-3 font-mono">{c.ip ?? "—"}</td>
+                  <td className="py-1.5 pr-3">
+                    <p className="text-gray-800">{c.ssid ?? "—"}</p>
+                    {c.band && <p className="text-gray-400">{c.band}</p>}
+                  </td>
+                  <td className="py-1.5 pr-3">
+                    {c.signal != null ? (
+                      <>
+                        <span className={`font-semibold ${c.signal > -70 ? "text-emerald-600" : c.signal > -80 ? "text-amber-600" : "text-red-600"}`}>
+                          {c.signal} dBm
+                        </span>
+                        {c.snr != null && <p className="text-gray-400 text-[10px]">SNR {c.snr} dB</p>}
+                      </>
+                    ) : "—"}
+                  </td>
+                  <td className="py-1.5 pr-3 font-mono">{wifiGenLabel(c.wifiMode)}</td>
+                  <td className="py-1.5 font-mono">{fmtUptimeSec(c.uptime)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {data.clients.length > 20 && (
+            <p className="text-xs text-gray-400 mt-1">+ {data.clients.length - 20} clientes não exibidos.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── UniFi section ─────────────────────────────────────────────────────────────
 
 interface UnifiData {
@@ -342,7 +510,7 @@ function Section({ title, children, breakBefore }: { title: string; children: Re
 // ── Device report block ───────────────────────────────────────────────────────
 
 function DeviceBlock({ report, index, showClients }: { report: DeviceReport; index: number; showClients: boolean }) {
-  const { device, period, summary, insights, pingHistory, incidents, routerosHistory, unifiSnapshot } = report;
+  const { device, period, summary, insights, pingHistory, incidents, routerosHistory, unifiSnapshot, omadaSnapshot } = report;
   const downtime = summary.totalDowntimeMs;
   const downtimeLabel = downtime > 0
     ? (downtime >= 3_600_000
@@ -428,6 +596,13 @@ function DeviceBlock({ report, index, showClients }: { report: DeviceReport; ind
       {unifiSnapshot != null && (
         <Section title="Dados UniFi (snapshot atual)" breakBefore>
           <UnifiSection data={unifiSnapshot as UnifiData} showClients={showClients} />
+        </Section>
+      )}
+
+      {/* Omada */}
+      {omadaSnapshot != null && (
+        <Section title="Dados Omada (snapshot atual)" breakBefore>
+          <OmadaSection data={omadaSnapshot as OmadaData} showClients={showClients} />
         </Section>
       )}
 

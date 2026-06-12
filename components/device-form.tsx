@@ -27,7 +27,7 @@ import type { Device } from "@prisma/client";
 const schema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   ip: z.string().min(1, "IP é obrigatório"),
-  type: z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER", "UNIFI_AP"]),
+  type: z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER", "UNIFI_AP", "OMADA_AP"]),
   location: z.string().optional(),
   notes: z.string().optional(),
   pingEnabled: z.boolean(),
@@ -51,13 +51,21 @@ const schema = z.object({
   unifiTlsVerify: z.boolean(),
   unifiMode: z.enum(["standalone", "controller"]),
   unifiControllerIp: z.string().optional().nullable(),
+  omadaEnabled: z.boolean(),
+  omadaClientId:     z.string().optional().nullable(),
+  omadaClientSecret: z.string().optional().nullable(),
+  omadacId:          z.string().optional().nullable(),
+  omadaSite:         z.string().optional().nullable(),
+  omadaSiteId:       z.string().optional().nullable(),
+  omadaTlsVerify:    z.boolean(),
+  omadaControllerIp: z.string().optional().nullable(),
   checkInterval: z.number().min(10).max(3600),
 });
 
 type FormData = z.infer<typeof schema>;
 
 interface DeviceFormProps {
-  device?: Device & { hasUnifiApiKey?: boolean; hasUnifiCredentials?: boolean };
+  device?: Device & { hasUnifiApiKey?: boolean; hasUnifiCredentials?: boolean; hasOmadaCredentials?: boolean };
 }
 
 export function DeviceForm({ device }: DeviceFormProps) {
@@ -101,6 +109,14 @@ export function DeviceForm({ device }: DeviceFormProps) {
           unifiTlsVerify: device.unifiTlsVerify,
           unifiMode: device.unifiControllerIp ? "controller" : "standalone",
           unifiControllerIp: device.unifiControllerIp ?? "",
+          omadaEnabled:      device.omadaEnabled,
+          omadaClientId:     "",
+          omadaClientSecret: "",
+          omadacId:          device.omadacId ?? "",
+          omadaSite:         device.omadaSite ?? "",
+          omadaSiteId:       device.omadaSiteId ?? "",
+          omadaTlsVerify:    device.omadaTlsVerify,
+          omadaControllerIp: device.omadaControllerIp ?? "",
           checkInterval: device.checkInterval,
         }
       : {
@@ -120,16 +136,28 @@ export function DeviceForm({ device }: DeviceFormProps) {
           unifiTlsVerify: false,
           unifiMode: "standalone",
           unifiControllerIp: "",
+          omadaEnabled:      false,
+          omadaClientId:     "",
+          omadaClientSecret: "",
+          omadacId:          "",
+          omadaSite:         "",
+          omadaSiteId:       "",
+          omadaTlsVerify:    true,
+          omadaControllerIp: "",
           checkInterval: 60,
         },
   });
 
+  const deviceType      = watch("type");
   const httpEnabled     = watch("httpEnabled");
   const snmpEnabled     = watch("snmpEnabled");
   const routerosEnabled = watch("routerosEnabled");
   const unifiEnabled    = watch("unifiEnabled");
   const unifiAuthMethod = watch("unifiAuthMethod");
   const unifiMode       = watch("unifiMode");
+  const omadaEnabled    = watch("omadaEnabled");
+
+  const [omadaTest, setOmadaTest] = useState<{ status: "idle" | "testing" | "ok" | "error"; message?: string; sites?: Array<{ siteId: string; name: string }> }>({ status: "idle" });
 
   async function testUnifiConnection() {
     const values = watch();
@@ -171,21 +199,61 @@ export function DeviceForm({ device }: DeviceFormProps) {
     }
   }
 
+  async function testOmadaConnection() {
+    const values = watch();
+    const controllerIp = values.omadaControllerIp?.trim() || values.ip;
+    const omadacId     = values.omadacId?.trim();
+
+    if (!controllerIp) {
+      setOmadaTest({ status: "error", message: "Informe o IP do controlador" });
+      return;
+    }
+    if (!omadacId) {
+      setOmadaTest({ status: "error", message: "Informe o Omada Controller ID (omadacId)" });
+      return;
+    }
+
+    setOmadaTest({ status: "testing" });
+    try {
+      const res = await fetch("/api/devices/test-omada", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          controllerIp,
+          omadacId,
+          tlsVerify: values.omadaTlsVerify,
+          omadaClientId:     values.omadaClientId     || undefined,
+          omadaClientSecret: values.omadaClientSecret || undefined,
+          deviceId: device?.id,
+        }),
+      });
+      const json = await res.json() as { ok?: boolean; message?: string; sites?: Array<{ siteId: string; name: string }>; error?: string };
+      if (res.ok && json.ok) {
+        setOmadaTest({ status: "ok", message: json.message, sites: json.sites });
+      } else {
+        setOmadaTest({ status: "error", message: json.error ?? "Falha no teste" });
+      }
+    } catch {
+      setOmadaTest({ status: "error", message: "Erro de rede ao testar conexão" });
+    }
+  }
+
   async function onSubmit(data: FormData) {
     setLoading(true);
     try {
       const url    = device ? `/api/devices/${device.id}` : "/api/devices";
       const method = device ? "PUT" : "POST";
 
-      // unifiMode is UI-only; map to unifiControllerIp (null = standalone/UDM)
-      const { unifiMode: _mode, ...rest } = data;
+      // UI-only mode field maps to controllerIp (null = standalone)
+      const { unifiMode: _uMode, ...rest } = data;
       const payload = {
         ...rest,
         unifiControllerIp:
           data.unifiMode === "controller" && data.unifiControllerIp
             ? data.unifiControllerIp
             : null,
-        // Clear the unused auth fields so the API can null them in DB
+        omadaControllerIp: data.omadaControllerIp || null,
+        // Clear unused auth fields so the API can null them in DB
         unifiApiKey: data.unifiAuthMethod === "apikey" ? (data.unifiApiKey || undefined) : "",
         unifiUser:   data.unifiAuthMethod === "userpass" ? (data.unifiUser || undefined) : "",
         unifiPass:   data.unifiAuthMethod === "userpass" ? (data.unifiPass || undefined) : "",
@@ -234,7 +302,13 @@ export function DeviceForm({ device }: DeviceFormProps) {
               <Label>Tipo</Label>
               <Select
                 defaultValue={device?.type ?? "MIKROTIK"}
-                onValueChange={(v) => setValue("type", v as FormData["type"])}
+                onValueChange={(v) => {
+                  setValue("type", v as FormData["type"]);
+                  // Disable protocol toggles that don't belong to the new type
+                  if (v !== "MIKROTIK") setValue("routerosEnabled", false);
+                  if (v !== "UNIFI_AP") setValue("unifiEnabled", false);
+                  if (v !== "OMADA_AP") setValue("omadaEnabled", false);
+                }}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -242,6 +316,7 @@ export function DeviceForm({ device }: DeviceFormProps) {
                 <SelectContent>
                   <SelectItem value="MIKROTIK">Mikrotik</SelectItem>
                   <SelectItem value="UNIFI_AP">UniFi AP</SelectItem>
+                  <SelectItem value="OMADA_AP">Omada AP (TP-Link)</SelectItem>
                   <SelectItem value="DVR">DVR</SelectItem>
                   <SelectItem value="CAMERA">Câmera</SelectItem>
                   <SelectItem value="OTHER">Outro</SelectItem>
@@ -355,8 +430,8 @@ export function DeviceForm({ device }: DeviceFormProps) {
 
           <Separator />
 
-          {/* RouterOS */}
-          <div className="space-y-3">
+          {/* RouterOS — apenas para Mikrotik */}
+          {deviceType === "MIKROTIK" && <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-sm">RouterOS API</p>
@@ -387,12 +462,12 @@ export function DeviceForm({ device }: DeviceFormProps) {
                 </div>
               </div>
             )}
-          </div>
+          </div>}
 
           <Separator />
 
-          {/* UniFi */}
-          <div className="space-y-3">
+          {/* UniFi — apenas para UniFi AP */}
+          {deviceType === "UNIFI_AP" && <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-sm">UniFi Controller API</p>
@@ -576,7 +651,150 @@ export function DeviceForm({ device }: DeviceFormProps) {
                 </div>
               </div>
             )}
-          </div>
+          </div>}
+
+          <Separator />
+
+          {/* Omada — apenas para Omada AP */}
+          {deviceType === "OMADA_AP" && <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-sm">Omada Controller API</p>
+                <p className="text-xs text-muted-foreground">SSIDs, clientes e métricas de APs TP-Link Omada</p>
+              </div>
+              <Switch
+                checked={omadaEnabled}
+                onCheckedChange={(v) => setValue("omadaEnabled", v)}
+              />
+            </div>
+            {omadaEnabled && (
+              <div className="space-y-3 pl-4 border-l-2 border-muted">
+                {/* OAuth2 Credentials */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">
+                      Client ID
+                      {device?.hasOmadaCredentials && (
+                        <span className="ml-2 text-muted-foreground font-normal">· já configurado</span>
+                      )}
+                    </Label>
+                    <Input
+                      placeholder={device?.hasOmadaCredentials ? "Deixe em branco para manter" : ""}
+                      {...register("omadaClientId")}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Client Secret</Label>
+                    <PasswordInput
+                      placeholder={device?.hasOmadaCredentials ? "Deixe em branco para manter" : ""}
+                      {...register("omadaClientSecret")}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Omada Controller ID</Label>
+                    <Input
+                      placeholder="a6f5e5d78223de677588121e18273675"
+                      className="font-mono text-xs"
+                      {...register("omadacId")}
+                    />
+                    <p className="text-[10px] text-muted-foreground">Identificador do controlador na API</p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">IP do Omada Controller</Label>
+                    <Input
+                      placeholder="10.0.0.19"
+                      className="font-mono"
+                      {...register("omadaControllerIp")}
+                    />
+                    <p className="text-[10px] text-muted-foreground">O IP do dispositivo identifica o AP</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={watch("omadaTlsVerify")}
+                    onCheckedChange={(v) => setValue("omadaTlsVerify", v)}
+                  />
+                  <Label className="text-xs">Verificar certificado TLS</Label>
+                </div>
+
+                {/* Test connection + site selector */}
+                <div className="space-y-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={omadaTest.status === "testing"}
+                    onClick={testOmadaConnection}
+                    className="gap-2"
+                  >
+                    {omadaTest.status === "testing" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <CheckCircle className="h-3.5 w-3.5" />
+                    )}
+                    {omadaTest.status === "testing" ? "Testando..." : "Testar conexão"}
+                  </Button>
+
+                  {omadaTest.status === "ok" && (
+                    <div className="flex items-start gap-2 rounded-md bg-success/10 border border-success/30 px-3 py-2 text-xs text-success">
+                      <CheckCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span>{omadaTest.message}</span>
+                    </div>
+                  )}
+                  {omadaTest.status === "error" && (
+                    <div className="flex items-start gap-2 rounded-md bg-destructive/5 border border-destructive/30 px-3 py-2 text-xs text-destructive">
+                      <XCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span>{omadaTest.message}</span>
+                    </div>
+                  )}
+
+                  {omadaTest.status === "ok" && omadaTest.sites && omadaTest.sites.length > 0 && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Site</Label>
+                      <Select
+                        value={watch("omadaSiteId") ?? ""}
+                        onValueChange={(v) => {
+                          const site = omadaTest.sites?.find((s) => s.siteId === v);
+                          setValue("omadaSiteId", v);
+                          setValue("omadaSite", site?.name ?? "");
+                        }}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="Selecione o site" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {omadaTest.sites.map((s) => (
+                            <SelectItem key={s.siteId} value={s.siteId} className="text-xs">
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {watch("omadaSite") && (
+                        <p className="text-[10px] text-muted-foreground">
+                          Site selecionado: <span className="font-medium">{watch("omadaSite")}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {(!omadaTest.sites || omadaTest.sites.length === 0) && (watch("omadaSite") || watch("omadaSiteId")) && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Site configurado</Label>
+                      <p className="text-xs text-muted-foreground">
+                        {watch("omadaSite")} <span className="opacity-50">({watch("omadaSiteId")})</span>
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>}
         </CardContent>
       </Card>
 

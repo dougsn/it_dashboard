@@ -59,6 +59,7 @@ export interface DeviceReport {
   incidents: ReportIncident[];
   routerosHistory: ReportRouterosPoint[] | null;
   unifiSnapshot: unknown | null;
+  omadaSnapshot: unknown | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -241,6 +242,11 @@ async function buildDeviceReport(
       ? device.currentStatus.unifiData
       : null;
 
+  const omadaSnapshot =
+    device.type === "OMADA_AP" && (device.currentStatus as (typeof device.currentStatus & { omadaData?: unknown }))?.omadaData
+      ? (device.currentStatus as (typeof device.currentStatus & { omadaData?: unknown }))!.omadaData
+      : null;
+
   const insights = buildInsights(summary, history, incidents);
 
   return {
@@ -258,6 +264,7 @@ async function buildDeviceReport(
     incidents,
     routerosHistory,
     unifiSnapshot,
+    omadaSnapshot,
   };
 }
 

@@ -25,7 +25,7 @@ const schema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   ipStart: z.string().min(1, "IP inicial é obrigatório"),
   ipEnd: z.string().min(1, "IP final é obrigatório"),
-  type: z.enum(["MIKROTIK", "UNIFI_AP", "DVR", "CAMERA", "OTHER"]),
+  type: z.enum(["MIKROTIK", "UNIFI_AP", "OMADA_AP", "DVR", "CAMERA", "OTHER"]),
   location: z.string().optional(),
   notes: z.string().optional(),
   pingEnabled: z.boolean(),
@@ -49,6 +49,14 @@ const schema = z.object({
   unifiTlsVerify: z.boolean(),
   unifiMode: z.enum(["standalone", "controller"]),
   unifiControllerIp: z.string().optional().nullable(),
+  omadaEnabled: z.boolean(),
+  omadaUser: z.string().optional().nullable(),
+  omadaPass: z.string().optional().nullable(),
+  omadaPort: z.number(),
+  omadaSite: z.string(),
+  omadaTlsVerify: z.boolean(),
+  omadaMode: z.enum(["standalone", "controller"]),
+  omadaControllerIp: z.string().optional().nullable(),
   checkInterval: z.number().min(10).max(3600),
 });
 
@@ -107,18 +115,28 @@ export function BulkDeviceForm() {
       unifiSite: "default",
       unifiTlsVerify: false,
       unifiMode: "standalone",
+      omadaEnabled: false,
+      omadaPort: 8043,
+      omadaSite: "Default",
+      omadaTlsVerify: true,
+      omadaMode: "standalone",
       checkInterval: 60,
     },
   });
 
-  const ipStart        = watch("ipStart") ?? "";
-  const ipEnd          = watch("ipEnd") ?? "";
-  const httpEnabled    = watch("httpEnabled");
-  const snmpEnabled    = watch("snmpEnabled");
+  const ipStart         = watch("ipStart") ?? "";
+  const ipEnd           = watch("ipEnd") ?? "";
+  const deviceType      = watch("type");
+  const httpEnabled     = watch("httpEnabled");
+  const snmpEnabled     = watch("snmpEnabled");
   const routerosEnabled = watch("routerosEnabled");
-  const unifiEnabled   = watch("unifiEnabled");
+  const unifiEnabled    = watch("unifiEnabled");
   const unifiAuthMethod = watch("unifiAuthMethod");
-  const unifiMode      = watch("unifiMode");
+  const unifiMode       = watch("unifiMode");
+  const omadaEnabled    = watch("omadaEnabled");
+  const omadaMode       = watch("omadaMode");
+
+  const [omadaTest, setOmadaTest] = useState<{ status: "idle" | "testing" | "ok" | "error"; message?: string }>({ status: "idle" });
 
   const preview = useCallback(() => {
     if (!ipStart || !ipEnd) return null;
@@ -171,6 +189,43 @@ export function BulkDeviceForm() {
       : "Máximo de 254 IPs por operação")
     : null;
 
+  async function testOmadaConnection() {
+    const values = watch();
+    const controllerIp =
+      values.omadaMode === "controller" && values.omadaControllerIp
+        ? values.omadaControllerIp
+        : null;
+
+    if (!controllerIp) {
+      setOmadaTest({ status: "error", message: "Informe o IP do controlador no modo OC / Controller" });
+      return;
+    }
+
+    setOmadaTest({ status: "testing" });
+    try {
+      const res = await fetch("/api/devices/test-omada", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          controllerIp,
+          port: values.omadaPort,
+          site: values.omadaSite,
+          tlsVerify: values.omadaTlsVerify,
+          omadaUser: values.omadaUser || undefined,
+          omadaPass: values.omadaPass || undefined,
+        }),
+      });
+      const json = await res.json() as { ok?: boolean; message?: string; error?: string };
+      if (res.ok && json.ok) {
+        setOmadaTest({ status: "ok", message: json.message });
+      } else {
+        setOmadaTest({ status: "error", message: json.error ?? "Falha no teste" });
+      }
+    } catch {
+      setOmadaTest({ status: "error", message: "Erro de rede ao testar conexão" });
+    }
+  }
+
   async function onSubmit(data: FormData) {
     if (!ips || ips.length === 0) {
       toast.error("Range de IPs inválido");
@@ -178,12 +233,16 @@ export function BulkDeviceForm() {
     }
     setLoading(true);
     try {
-      const { unifiMode: _mode, ...rest } = data;
+      const { unifiMode: _uMode, omadaMode: _oMode, ...rest } = data;
       const payload = {
         ...rest,
         unifiControllerIp:
           data.unifiMode === "controller" && data.unifiControllerIp
             ? data.unifiControllerIp
+            : null,
+        omadaControllerIp:
+          data.omadaMode === "controller" && data.omadaControllerIp
+            ? data.omadaControllerIp
             : null,
         unifiApiKey: data.unifiAuthMethod === "apikey" ? (data.unifiApiKey || undefined) : "",
         unifiUser:   data.unifiAuthMethod === "userpass" ? (data.unifiUser || undefined) : "",
@@ -277,7 +336,12 @@ export function BulkDeviceForm() {
               <Label>Tipo</Label>
               <Select
                 defaultValue="CAMERA"
-                onValueChange={(v) => setValue("type", v as FormData["type"])}
+                onValueChange={(v) => {
+                  setValue("type", v as FormData["type"]);
+                  if (v !== "MIKROTIK") setValue("routerosEnabled", false);
+                  if (v !== "UNIFI_AP") setValue("unifiEnabled", false);
+                  if (v !== "OMADA_AP") setValue("omadaEnabled", false);
+                }}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -285,6 +349,7 @@ export function BulkDeviceForm() {
                 <SelectContent>
                   <SelectItem value="MIKROTIK">Mikrotik</SelectItem>
                   <SelectItem value="UNIFI_AP">UniFi AP</SelectItem>
+                  <SelectItem value="OMADA_AP">Omada AP (TP-Link)</SelectItem>
                   <SelectItem value="DVR">DVR</SelectItem>
                   <SelectItem value="CAMERA">Câmera</SelectItem>
                   <SelectItem value="OTHER">Outro</SelectItem>
@@ -391,7 +456,7 @@ export function BulkDeviceForm() {
 
           <Separator />
 
-          <div className="space-y-3">
+          {deviceType === "MIKROTIK" && <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-sm">RouterOS API</p>
@@ -422,12 +487,12 @@ export function BulkDeviceForm() {
                 </div>
               </div>
             )}
-          </div>
+          </div>}
 
           <Separator />
 
-          {/* UniFi */}
-          <div className="space-y-3">
+          {/* UniFi — apenas para UniFi AP */}
+          {deviceType === "UNIFI_AP" && <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-sm">UniFi Controller API</p>
@@ -590,7 +655,129 @@ export function BulkDeviceForm() {
                 </div>
               </div>
             )}
-          </div>
+          </div>}
+
+          <Separator />
+
+          {/* Omada — apenas para Omada AP */}
+          {deviceType === "OMADA_AP" && <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-sm">Omada Controller API</p>
+                <p className="text-xs text-muted-foreground">SSIDs, clientes e métricas de APs TP-Link Omada</p>
+              </div>
+              <Switch
+                checked={omadaEnabled}
+                onCheckedChange={(v) => setValue("omadaEnabled", v)}
+              />
+            </div>
+            {omadaEnabled && (
+              <div className="space-y-3 pl-4 border-l-2 border-muted">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Usuário</Label>
+                    <Input placeholder="admin" {...register("omadaUser")} autoComplete="off" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Senha</Label>
+                    <PasswordInput {...register("omadaPass")} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Site</Label>
+                    <Input placeholder="Default" {...register("omadaSite")} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Porta</Label>
+                    <Input
+                      type="number"
+                      placeholder="8043"
+                      {...register("omadaPort", { valueAsNumber: true })}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={watch("omadaTlsVerify")}
+                    onCheckedChange={(v) => setValue("omadaTlsVerify", v)}
+                  />
+                  <Label className="text-xs">Verificar certificado TLS</Label>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs">Modo de conexão</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["standalone", "controller"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setValue("omadaMode", mode)}
+                        className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
+                          omadaMode === mode
+                            ? "border-primary bg-primary/5 text-primary font-semibold"
+                            : "border-border text-muted-foreground hover:border-muted-foreground"
+                        }`}
+                      >
+                        <p className="font-medium">
+                          {mode === "standalone" ? "AP direto" : "OC (Controller separado)"}
+                        </p>
+                        <p className="text-[10px] opacity-70 mt-0.5">
+                          {mode === "standalone"
+                            ? "O IP do dispositivo é o controlador"
+                            : "Omada Controller em IP separado"}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {omadaMode === "controller" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">IP do Omada Controller</Label>
+                    <Input
+                      placeholder="192.168.1.10"
+                      className="font-mono"
+                      {...register("omadaControllerIp")}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      O IP acima identifica cada AP; o controlador é acessado neste endereço.
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={omadaTest.status === "testing"}
+                    onClick={testOmadaConnection}
+                    className="inline-flex items-center gap-2 h-8 px-3 rounded-lg border border-border bg-background text-xs font-medium hover:bg-muted disabled:opacity-50 transition-colors"
+                  >
+                    {omadaTest.status === "testing" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <CheckCircle className="h-3.5 w-3.5" />
+                    )}
+                    {omadaTest.status === "testing" ? "Testando..." : "Testar conexão"}
+                  </button>
+                  {omadaTest.status === "ok" && (
+                    <div className="flex items-start gap-2 rounded-md bg-success/10 border border-success/30 px-3 py-2 text-xs text-success">
+                      <CheckCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span>{omadaTest.message}</span>
+                    </div>
+                  )}
+                  {omadaTest.status === "error" && (
+                    <div className="flex items-start gap-2 rounded-md bg-destructive/5 border border-destructive/30 px-3 py-2 text-xs text-destructive">
+                      <XCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span>{omadaTest.message}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>}
         </CardContent>
       </Card>
 

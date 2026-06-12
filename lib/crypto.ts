@@ -61,3 +61,13 @@ export function resolveUnifiCredentials(device: {
   if (!username || !password) return null;
   return { username, password };
 }
+
+export function resolveOmadaCredentials(device: {
+  omadaClientIdEnc:     string | null;
+  omadaClientSecretEnc: string | null;
+}): { clientId: string; clientSecret: string } | null {
+  const clientId     = device.omadaClientIdEnc     ? decrypt(device.omadaClientIdEnc)     : null;
+  const clientSecret = device.omadaClientSecretEnc ? decrypt(device.omadaClientSecretEnc) : null;
+  if (!clientId || !clientSecret) return null;
+  return { clientId, clientSecret };
+}

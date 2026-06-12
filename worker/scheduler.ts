@@ -4,8 +4,9 @@ import { checkHttp } from "./monitors/http";
 import { checkSnmp } from "./monitors/snmp";
 import { checkRouterOS } from "./monitors/routeros";
 import { checkUnifi } from "./monitors/unifi";
+import { checkOmada } from "./monitors/omada";
 import { checkLinkTraffic } from "./monitors/link-traffic";
-import { resolveRouterosCredentials, resolveUnifiApiKey, resolveUnifiCredentials } from "../lib/crypto";
+import { resolveRouterosCredentials, resolveUnifiApiKey, resolveUnifiCredentials, resolveOmadaCredentials } from "../lib/crypto";
 import { log } from "../lib/logger";
 import type { Device, Link } from "@prisma/client";
 
@@ -67,6 +68,13 @@ export async function runChecks(device: Device) {
         ? checkUnifi(device.ip, controllerIp, { method: "apikey", apiKey }, device.unifiPort, device.unifiSite, device.unifiTlsVerify)
         : Promise.resolve(null);
     })(),
+    (() => {
+      if (!device.omadaEnabled) return Promise.resolve(null);
+      const creds = resolveOmadaCredentials(device);
+      if (!creds || !device.omadacId || !device.omadaSiteId) return Promise.resolve(null);
+      const controllerIp = device.omadaControllerIp ?? device.ip;
+      return checkOmada(device.ip, controllerIp, device.omadacId, creds.clientId, creds.clientSecret, device.omadaSiteId, device.omadaTlsVerify);
+    })(),
   ]);
 
   const pingResult     = results[0].status === "fulfilled" ? results[0].value : null;
@@ -74,6 +82,7 @@ export async function runChecks(device: Device) {
   const snmpResult     = results[2].status === "fulfilled" ? results[2].value : null;
   const routerosResult = results[3].status === "fulfilled" ? results[3].value : null;
   const unifiResult    = results[4].status === "fulfilled" ? results[4].value : null;
+  const omadaResult    = results[5].status === "fulfilled" ? results[5].value : null;
 
   if (results[2].status === "rejected" && device.snmpEnabled) {
     log("error", "[SNMP] monitor falhou", {
@@ -90,42 +99,64 @@ export async function runChecks(device: Device) {
   const unifiError = results[4].status === "rejected" && device.unifiEnabled
     ? (results[4].reason?.message ?? String(results[4].reason))
     : null;
+  const omadaError = results[5].status === "rejected" && device.omadaEnabled
+    ? (results[5].reason?.message ?? String(results[5].reason))
+    : null;
 
   if (unifiError) {
     log("error", "[UniFi] monitor falhou", { device: device.name, ip: device.ip, error: unifiError });
   }
+  if (omadaError) {
+    log("error", "[Omada] monitor falhou", { device: device.name, ip: device.ip, error: omadaError });
+  }
 
-  const isOnline = pingResult?.alive ?? httpResult?.ok ?? (unifiResult != null ? true : null) ?? false;
+  // Controller API results (Omada/UniFi) take precedence: if the controller reports
+  // the AP, it's online even when ICMP is blocked. Ping/HTTP are fallbacks only.
+  const isOnline =
+    (omadaResult != null ? true : null) ??
+    (unifiResult != null ? true : null) ??
+    pingResult?.alive ??
+    httpResult?.ok ??
+    false;
   const pingMs   = pingResult?.alive ? pingResult.responseMs : null;
   const httpOk   = httpResult?.ok ?? null;
 
-  const uptime     = routerosResult?.uptime     ?? snmpResult?.uptime     ?? unifiResult?.uptime     ?? null;
-  const cpuLoad    = routerosResult?.cpuLoad    ?? snmpResult?.cpuLoad    ?? unifiResult?.cpuLoad    ?? null;
-  const memoryUsed = routerosResult?.memoryUsed ?? snmpResult?.memoryUsed ?? unifiResult?.memoryUsed ?? null;
+  const uptime     = routerosResult?.uptime     ?? snmpResult?.uptime     ?? unifiResult?.uptime     ?? omadaResult?.uptime     ?? null;
+  const cpuLoad    = routerosResult?.cpuLoad    ?? snmpResult?.cpuLoad    ?? unifiResult?.cpuLoad    ?? omadaResult?.cpuLoad    ?? null;
+  const memoryUsed = routerosResult?.memoryUsed ?? snmpResult?.memoryUsed ?? unifiResult?.memoryUsed ?? omadaResult?.memoryUsed ?? null;
 
   const now = new Date();
 
-  // When unifi succeeds: save data and clear any previous error.
-  // When unifi fails: keep stale unifiData but record the error message.
-  // When unifi is disabled: leave both fields untouched (undefined = no-op in Prisma).
   const unifiUpdate = device.unifiEnabled
     ? unifiResult
       ? { unifiData: unifiResult as unknown as import("@prisma/client").Prisma.InputJsonValue, unifiError: null }
       : { unifiError }
     : {};
 
+  const omadaUpdate = device.omadaEnabled
+    ? omadaResult
+      ? { omadaData: omadaResult as unknown as import("@prisma/client").Prisma.InputJsonValue, omadaError: null }
+      : { omadaError }
+    : {};
+
   await db.$transaction([
     db.deviceStatus.upsert({
       where: { deviceId: device.id },
-      update: { isOnline, pingMs, httpOk, uptime, cpuLoad, memoryUsed, ...unifiUpdate, checkedAt: now },
-      create: { deviceId: device.id, isOnline, pingMs, httpOk, uptime, cpuLoad, memoryUsed, ...unifiUpdate, checkedAt: now },
+      update: { isOnline, pingMs, httpOk, uptime, cpuLoad, memoryUsed, ...unifiUpdate, ...omadaUpdate, checkedAt: now },
+      create: { deviceId: device.id, isOnline, pingMs, httpOk, uptime, cpuLoad, memoryUsed, ...unifiUpdate, ...omadaUpdate, checkedAt: now },
     }),
     db.statusHistory.create({
       data: { deviceId: device.id, isOnline, pingMs, cpuLoad, memoryUsed, timestamp: now },
     }),
   ]);
 
-  if (unifiResult) {
+  if (omadaResult) {
+    log("info", `${isOnline ? "✓" : "✗"} ${device.name}`, {
+      ip: device.ip,
+      clients: omadaResult.totalClients,
+      ssids: omadaResult.ssids.length,
+    });
+  } else if (unifiResult) {
     log("info", `${isOnline ? "✓" : "✗"} ${device.name}`, {
       ip: device.ip,
       clients: unifiResult.totalClients,

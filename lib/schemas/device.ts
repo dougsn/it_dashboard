@@ -12,7 +12,7 @@ const ipSchema = z
 export const deviceConfigSchema = z.object({
   name: z.string().min(1).max(100),
   ip: ipSchema,
-  type: z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER", "UNIFI_AP"]),
+  type: z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER", "UNIFI_AP", "OMADA_AP"]),
   location: z.string().max(200).optional(),
   notes: z.string().max(1000).optional(),
   pingEnabled: z.boolean().default(true),
@@ -41,6 +41,14 @@ export const deviceConfigSchema = z.object({
   // SEC-023: TLS verificado por padrão — desabilitar é inseguro e deve ser explícito
   unifiTlsVerify: z.boolean().default(true),
   unifiControllerIp: ipSchema.optional().nullable(),
+  omadaEnabled:         z.boolean().default(false),
+  omadaClientId:        z.string().optional().nullable(),
+  omadaClientSecret:    z.string().optional().nullable(),
+  omadacId:             z.string().optional().nullable(),
+  omadaSite:            z.string().optional().nullable(),
+  omadaSiteId:          z.string().optional().nullable(),
+  omadaTlsVerify:       z.boolean().default(true),
+  omadaControllerIp:    ipSchema.optional().nullable(),
   checkInterval: z.number().int().min(10).max(3600).default(60),
 });
 
