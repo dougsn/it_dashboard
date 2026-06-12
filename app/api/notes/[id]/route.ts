@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/with-auth";
+import { requireAuth, requireRole } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { parseAndValidate } from "@/lib/parse-body";
@@ -36,7 +36,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const unauth = await requireAuth();
+  const unauth = await requireRole("OPERADOR");
   if (unauth) return unauth;
   const { id } = await params;
   const body = await parseAndValidate(req, updateNoteSchema);
@@ -69,7 +69,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const unauth = await requireAuth();
+  const unauth = await requireRole("OPERADOR");
   if (unauth) return unauth;
   const { id } = await params;
   try {

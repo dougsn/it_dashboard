@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/with-auth";
+import { requireAuth, requireRole } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { deviceConfigSchema } from "@/lib/schemas/device";
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const unauth = await requireAuth();
+  const unauth = await requireRole("OPERADOR");
   if (unauth) return unauth;
   const body = await parseAndValidate(req, deviceConfigSchema);
   if (!body.ok) return body.response;
