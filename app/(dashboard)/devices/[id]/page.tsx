@@ -170,12 +170,9 @@ export default function DeviceDetailPage({
   }, [hours, load]);
 
   useEffect(() => {
-    const interval = setInterval(async () => {
-      const r = await fetch(`/api/devices/${id}`);
-      if (r.ok) setDevice(await r.json());
-    }, 30_000);
+    const interval = setInterval(() => load(hours), 30_000);
     return () => clearInterval(interval);
-  }, [id]);
+  }, [id, hours, load]);
 
   async function handleCheck() {
     setIsChecking(true);
