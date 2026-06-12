@@ -29,7 +29,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           if (!valid) return null;
 
-          return { id: user.id, name: user.username };
+          return { id: user.id, name: user.username, role: user.role };
         } catch (error) {
           console.error("[auth] erro:", error);
           return null;
@@ -37,4 +37,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
+  callbacks: {
+    jwt({ token, user }) {
+      if (user) token.role = (user as { role: string }).role;
+      return token;
+    },
+    session({ session, token }) {
+      if (session.user) {
+        (session.user as { role?: string }).role = token.role as string;
+      }
+      return session;
+    },
+  },
 });

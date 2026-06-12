@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Server, Network, StickyNote, LogOut, AlertCircle, FileText, RadioTower, Wifi, Router } from "lucide-react";
+import { LayoutDashboard, Server, Network, StickyNote, LogOut, AlertCircle, FileText, RadioTower, Wifi, Router, Users } from "lucide-react";
 
 interface SidebarCounts {
   devicesTotal: number;
@@ -116,7 +116,7 @@ function UserAvatar({ name }: { name: string }) {
   );
 }
 
-export function Sidebar({ userName = "Usuário" }: { userName?: string }) {
+export function Sidebar({ userName = "Usuário", userRole = "VIEWER" }: { userName?: string; userRole?: string }) {
   const pathname = usePathname();
   const [counts, setCounts] = useState<SidebarCounts>({
     devicesTotal: 0,
@@ -243,6 +243,18 @@ export function Sidebar({ userName = "Usuário" }: { userName?: string }) {
           icon={StickyNote}
           active={pathname.startsWith("/notes")}
         />
+
+        {userRole === "ADMIN" && (
+          <>
+            <NavSectionLabel>Administração</NavSectionLabel>
+            <NavItem
+              href="/users"
+              label="Usuários"
+              icon={Users}
+              active={pathname.startsWith("/users")}
+            />
+          </>
+        )}
       </nav>
 
       {/* User footer */}
@@ -251,7 +263,9 @@ export function Sidebar({ userName = "Usuário" }: { userName?: string }) {
           <UserAvatar name={userName} />
           <div className="flex-1 min-w-0">
             <div className="text-[13px] font-bold leading-tight truncate">{userName}</div>
-            <div className="text-[11px] text-muted-foreground font-semibold">Administrador</div>
+            <div className="text-[11px] text-muted-foreground font-semibold">
+              {userRole === "ADMIN" ? "Administrador" : userRole === "OPERADOR" ? "Operador" : "Viewer"}
+            </div>
           </div>
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}

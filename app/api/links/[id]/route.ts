@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { z } from "zod";
-import { requireAuth } from "@/lib/with-auth";
+import { requireAuth, requireRole } from "@/lib/with-auth";
 import { parseAndValidate } from "@/lib/parse-body";
 import { notFoundOnP2025 } from "@/lib/prisma-error";
 
@@ -27,7 +27,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 }
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const unauth = await requireAuth();
+  const unauth = await requireRole("OPERADOR");
   if (unauth) return unauth;
   const { id } = await params;
   const body = await parseAndValidate(req, updateSchema);
@@ -42,7 +42,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const unauth = await requireAuth();
+  const unauth = await requireRole("OPERADOR");
   if (unauth) return unauth;
   const { id } = await params;
   try {

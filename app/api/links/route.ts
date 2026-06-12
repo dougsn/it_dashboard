@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { z } from "zod";
-import { requireAuth } from "@/lib/with-auth";
+import { requireAuth, requireRole } from "@/lib/with-auth";
 import { generateWebhookToken } from "@/lib/webhook";
 import { parseAndValidate } from "@/lib/parse-body";
 
@@ -34,7 +34,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const unauth = await requireAuth();
+  const unauth = await requireRole("OPERADOR");
   if (unauth) return unauth;
   const body = await parseAndValidate(req, createSchema);
   if (!body.ok) return body.response;

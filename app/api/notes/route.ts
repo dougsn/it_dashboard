@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/with-auth";
+import { requireAuth, requireRole } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { parseAndValidate } from "@/lib/parse-body";
@@ -28,7 +28,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const unauth = await requireAuth();
+  const unauth = await requireRole("OPERADOR");
   if (unauth) return unauth;
   const body = await parseAndValidate(req, noteSchema);
   if (!body.ok) return body.response;
