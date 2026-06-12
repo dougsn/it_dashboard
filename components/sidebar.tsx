@@ -160,7 +160,7 @@ export function Sidebar({ userName = "Usuário", userRole = "VIEWER" }: { userNa
       <div className="flex items-center gap-2.5 px-2 pb-5">
         <BrandMark />
         <div>
-          <div className="font-extrabold text-[15px] tracking-tight leading-none">NetWatch</div>
+          <div className="font-extrabold text-[15px] tracking-tight leading-none">WatchIT Tower</div>
           <div className="text-[11px] text-muted-foreground font-semibold mt-0.5">Monitoramento</div>
         </div>
       </div>

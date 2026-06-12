@@ -34,9 +34,9 @@ beforeEach(() => {
 });
 
 describe("Sidebar", () => {
-  it("renders brand name 'NetWatch'", async () => {
+  it("renders brand name 'WatchIT Tower'", async () => {
     render(<Sidebar />);
-    expect(screen.getByText("NetWatch")).toBeInTheDocument();
+    expect(screen.getByText("WatchIT Tower")).toBeInTheDocument();
   });
 
   it("renders all main navigation links", async () => {
