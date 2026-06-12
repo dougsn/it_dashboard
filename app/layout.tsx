@@ -17,8 +17,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NetWatch — Monitoramento de Rede",
-  description: "Monitoramento de equipamentos de TI",
+  title: "WatchIT Tower — Monitoramento de Rede",
+  description: "WatchIT Tower — Monitoramento de equipamentos de TI",
 };
 
 export default function RootLayout({
