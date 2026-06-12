@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Server, Network, StickyNote, LogOut, AlertCircle, FileText } from "lucide-react";
+import { LayoutDashboard, Server, Network, StickyNote, LogOut, AlertCircle, FileText, RadioTower, Wifi, Router } from "lucide-react";
 
 interface SidebarCounts {
   devicesTotal: number;
@@ -203,6 +203,29 @@ export function Sidebar({ userName = "Usuário" }: { userName?: string }) {
           icon={AlertCircle}
           active={pathname.startsWith("/incidents")}
           alertBadge={counts.devicesOffline}
+        />
+
+        <NavSectionLabel>Painéis</NavSectionLabel>
+
+        <NavItem
+          href="/mikrotik"
+          label="Mikrotik"
+          icon={Router}
+          active={pathname.startsWith("/mikrotik")}
+        />
+
+        <NavItem
+          href="/omada"
+          label="Omada"
+          icon={RadioTower}
+          active={pathname.startsWith("/omada")}
+        />
+
+        <NavItem
+          href="/unifi"
+          label="UniFi"
+          icon={Wifi}
+          active={pathname.startsWith("/unifi")}
         />
 
         <NavSectionLabel>Sistema</NavSectionLabel>
