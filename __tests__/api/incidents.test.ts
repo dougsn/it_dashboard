@@ -22,7 +22,7 @@ import { db } from "@/lib/db";
 const mockAuth = auth as jest.MockedFunction<typeof auth>;
 const mockDb = db as jest.Mocked<typeof db>;
 
-const FAKE_SESSION = { user: { id: "user-1", name: "admin" }, expires: "2099-01-01" };
+const FAKE_SESSION = { user: { id: "user-1", name: "admin", role: "ADMIN" }, expires: "2099-01-01" };
 
 function makeReq(params = "") {
   return new NextRequest(`http://localhost/api/incidents${params}`);

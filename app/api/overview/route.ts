@@ -4,6 +4,11 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 
+const CACHE_TTL_MS = 15_000;
+let cache: { data: OverviewData; expiresAt: number } | null = null;
+
+export function resetOverviewCache() { cache = null; }
+
 export type SegmentState = "online" | "offline" | "degraded" | "empty";
 
 export interface OverviewData {
@@ -11,10 +16,14 @@ export interface OverviewData {
   linkSegments: Record<string, SegmentState[]>;
 }
 
-export async function GET() {
+export async function GET(_req: Request) {
   const unauth = await requireAuth();
   if (unauth) return unauth;
   const now = Date.now();
+
+  if (cache && now < cache.expiresAt) {
+    return NextResponse.json(cache.data);
+  }
   const since24h = new Date(now - 24 * 3_600_000);
   const since6h  = new Date(now - 6  * 3_600_000);
 
@@ -112,5 +121,7 @@ export async function GET() {
     linkSegments[link.id] = segments;
   }
 
-  return NextResponse.json({ sparklines, linkSegments } satisfies OverviewData);
+  const payload: OverviewData = { sparklines, linkSegments };
+  cache = { data: payload, expiresAt: now + CACHE_TTL_MS };
+  return NextResponse.json(payload);
 }

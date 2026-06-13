@@ -16,6 +16,25 @@ const deviceSnapshots = new Map<string, Date>(); // deviceId -> last known updat
 const pendingChecks   = new Set<Promise<unknown>>();
 const allIntervals    = new Set<ReturnType<typeof setInterval>>();
 
+// Semaphore: at most MAX_CONCURRENT_CHECKS devices polled simultaneously.
+// Prevents DB and network saturation when many devices fire at the same time.
+const MAX_CONCURRENT_CHECKS = 20;
+let activeChecks = 0;
+const checkQueue: Array<() => void> = [];
+
+function acquireSlot(): Promise<void> {
+  if (activeChecks < MAX_CONCURRENT_CHECKS) {
+    activeChecks++;
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => checkQueue.push(resolve));
+}
+
+function releaseSlot(): void {
+  const next = checkQueue.shift();
+  if (next) { next(); } else { activeChecks--; }
+}
+
 // Backoff: after BACKOFF_THRESHOLD consecutive failures, skip ticks until skipUntil[deviceId]
 const consecutiveFailures = new Map<string, number>();
 const skipUntil           = new Map<string, number>(); // deviceId -> epoch ms
@@ -40,6 +59,8 @@ export async function shutdown(timeoutMs = 10_000): Promise<void> {
   timers.clear();
   consecutiveFailures.clear();
   skipUntil.clear();
+  checkQueue.length = 0;
+  activeChecks = 0;
   const deadline = new Promise<void>((r) => {
     const t = setTimeout(r, timeoutMs);
     if (typeof t === "object" && t !== null && "unref" in t) (t as NodeJS.Timeout).unref();
@@ -213,6 +234,7 @@ function scheduleDevice(device: Device) {
     const skipTs = skipUntil.get(device.id);
     if (skipTs && Date.now() < skipTs) return;
 
+    await acquireSlot();
     try {
       const isOnline = await runChecks(device);
       if (isOnline) {
@@ -263,6 +285,8 @@ function scheduleDevice(device: Device) {
         error: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack?.split("\n").slice(0, 3).join(" | ") : undefined,
       });
+    } finally {
+      releaseSlot();
     }
   };
 

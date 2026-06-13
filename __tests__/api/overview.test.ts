@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { GET } from "@/app/api/overview/route";
+import { GET, resetOverviewCache } from "@/app/api/overview/route";
 import { NextRequest } from "next/server";
 
 jest.mock("@/lib/auth", () => ({
@@ -22,7 +22,7 @@ import { db } from "@/lib/db";
 const mockAuth = auth as jest.MockedFunction<typeof auth>;
 const mockDb = db as jest.Mocked<typeof db>;
 
-const FAKE_SESSION = { user: { id: "user-1", name: "admin" }, expires: "2099-01-01" };
+const FAKE_SESSION = { user: { id: "user-1", name: "admin", role: "ADMIN" }, expires: "2099-01-01" };
 
 function makeReq() {
   return new NextRequest("http://localhost/api/overview");
@@ -36,12 +36,13 @@ function emptyDb() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  resetOverviewCache();
 });
 
 describe("GET /api/overview", () => {
   it("returns 401 when not authenticated (regression: endpoint was public)", async () => {
     mockAuth.mockResolvedValue(null as never);
-    const res = await GET();
+    const res = await GET(new Request("http://localhost/api/overview"));
     expect(res.status).toBe(401);
   });
 
@@ -49,7 +50,7 @@ describe("GET /api/overview", () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
     emptyDb();
 
-    const res = await GET();
+    const res = await GET(new Request("http://localhost/api/overview"));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data).toHaveProperty("sparklines");
@@ -66,7 +67,7 @@ describe("GET /api/overview", () => {
     (mockDb.link.findMany as jest.Mock).mockResolvedValue([]);
     (mockDb.linkEvent.findMany as jest.Mock).mockResolvedValue([]);
 
-    const res = await GET();
+    const res = await GET(new Request("http://localhost/api/overview"));
     const data = await res.json();
     expect(data.sparklines["d1"]).toEqual([10, null, 20]);
   });
@@ -82,7 +83,7 @@ describe("GET /api/overview", () => {
     (mockDb.link.findMany as jest.Mock).mockResolvedValue([]);
     (mockDb.linkEvent.findMany as jest.Mock).mockResolvedValue([]);
 
-    const res = await GET();
+    const res = await GET(new Request("http://localhost/api/overview"));
     const data = await res.json();
     expect(data.sparklines["d1"]).toHaveLength(60);
     // Should keep the last 60 (21..80)
@@ -96,7 +97,7 @@ describe("GET /api/overview", () => {
     (mockDb.link.findMany as jest.Mock).mockResolvedValue([{ id: "link-1", isOnline: true }]);
     (mockDb.linkEvent.findMany as jest.Mock).mockResolvedValue([]);
 
-    const res = await GET();
+    const res = await GET(new Request("http://localhost/api/overview"));
     const data = await res.json();
     expect(data.linkSegments["link-1"]).toHaveLength(24);
   });
@@ -107,7 +108,7 @@ describe("GET /api/overview", () => {
     (mockDb.link.findMany as jest.Mock).mockResolvedValue([{ id: "link-1", isOnline: true }]);
     (mockDb.linkEvent.findMany as jest.Mock).mockResolvedValue([]);
 
-    const res = await GET();
+    const res = await GET(new Request("http://localhost/api/overview"));
     const data = await res.json();
     expect(data.linkSegments["link-1"].every((s: string) => s === "online")).toBe(true);
   });
@@ -118,7 +119,7 @@ describe("GET /api/overview", () => {
     (mockDb.link.findMany as jest.Mock).mockResolvedValue([{ id: "link-1", isOnline: false }]);
     (mockDb.linkEvent.findMany as jest.Mock).mockResolvedValue([]);
 
-    const res = await GET();
+    const res = await GET(new Request("http://localhost/api/overview"));
     const data = await res.json();
     expect(data.linkSegments["link-1"].every((s: string) => s === "offline")).toBe(true);
   });
@@ -138,7 +139,7 @@ describe("GET /api/overview", () => {
       { linkId: "link-1", type: "UP",   timestamp: upTs   },
     ]);
 
-    const res = await GET();
+    const res = await GET(new Request("http://localhost/api/overview"));
     const data = await res.json();
     const segments: string[] = data.linkSegments["link-1"];
     expect(segments[23]).toBe("degraded");
@@ -156,7 +157,7 @@ describe("GET /api/overview", () => {
       { linkId: "link-1", type: "DOWN", timestamp: downTs },
     ]);
 
-    const res = await GET();
+    const res = await GET(new Request("http://localhost/api/overview"));
     const data = await res.json();
     const segments: string[] = data.linkSegments["link-1"];
     expect(segments[23]).toBe("offline");
@@ -171,7 +172,7 @@ describe("GET /api/overview", () => {
     ]);
     (mockDb.linkEvent.findMany as jest.Mock).mockResolvedValue([]);
 
-    const res = await GET();
+    const res = await GET(new Request("http://localhost/api/overview"));
     const data = await res.json();
     expect(data.linkSegments["link-A"].every((s: string) => s === "online")).toBe(true);
     expect(data.linkSegments["link-B"].every((s: string) => s === "offline")).toBe(true);

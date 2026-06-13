@@ -14,6 +14,7 @@ jest.mock("@/lib/db", () => ({
       findMany: jest.fn(),
       create: jest.fn(),
       count: jest.fn(),
+      aggregate: jest.fn(),
     },
   },
 }));
@@ -61,6 +62,7 @@ const FAKE_DEVICE = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  (mockDb.device.aggregate as jest.Mock).mockResolvedValue({ _count: 1, _max: { updatedAt: new Date("2024-01-01") } });
 });
 
 describe("GET /api/devices", () => {

@@ -20,7 +20,7 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/db", () => ({
   db: {
-    device: { findMany: jest.fn(), create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), delete: jest.fn() },
+    device: { findMany: jest.fn(), create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), delete: jest.fn(), aggregate: jest.fn().mockResolvedValue({ _count: 0, _max: { updatedAt: null } }) },
     statusHistory: { findMany: jest.fn() },
     note: { findMany: jest.fn(), create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), delete: jest.fn() },
   },
@@ -89,7 +89,7 @@ describe("Route authentication enforcement", () => {
 describe("Input validation security", () => {
   it("POST /api/devices rejects oversized name via Zod schema", async () => {
     const { auth } = require("@/lib/auth");
-    auth.mockResolvedValueOnce({ user: { id: "u1" }, expires: "2099-01-01" });
+    auth.mockResolvedValueOnce({ user: { id: "u1", role: "ADMIN" }, expires: "2099-01-01" });
 
     const { db } = require("@/lib/db");
     (db.device.create as jest.Mock).mockResolvedValueOnce({
@@ -115,7 +115,7 @@ describe("Input validation security", () => {
 
   it("POST /api/devices rejects invalid type enum", async () => {
     const { auth } = require("@/lib/auth");
-    auth.mockResolvedValueOnce({ user: { id: "u1" }, expires: "2099-01-01" });
+    auth.mockResolvedValueOnce({ user: { id: "u1", role: "ADMIN" }, expires: "2099-01-01" });
 
     const req = new NextRequest("http://localhost/api/devices", {
       method: "POST",
@@ -129,7 +129,7 @@ describe("Input validation security", () => {
 describe("Status history boundary security", () => {
   it("hours parameter is capped to prevent excessive DB queries", async () => {
     const { auth } = require("@/lib/auth");
-    auth.mockResolvedValueOnce({ user: { id: "u1" }, expires: "2099-01-01" });
+    auth.mockResolvedValueOnce({ user: { id: "u1", role: "ADMIN" }, expires: "2099-01-01" });
 
     const { db } = require("@/lib/db");
     (db.statusHistory.findMany as jest.Mock).mockResolvedValueOnce([]);

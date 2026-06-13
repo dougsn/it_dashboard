@@ -49,3 +49,6 @@ prisma/*.db-journal
 
 # env
 .env.local
+e2e/.auth/
+playwright-report/
+test-results/

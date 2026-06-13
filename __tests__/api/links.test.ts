@@ -32,7 +32,7 @@ import { db }   from "@/lib/db";
 const mockAuth = auth as jest.MockedFunction<typeof auth>;
 const mockDb   = db   as jest.Mocked<typeof db>;
 
-const SESSION = { user: { id: "u1", name: "admin" }, expires: "2099-01-01" };
+const SESSION = { user: { id: "u1", name: "admin", role: "ADMIN" }, expires: "2099-01-01" };
 const LINK_ID = "link-test-001";
 
 const fakeLink = {

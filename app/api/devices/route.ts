@@ -9,6 +9,7 @@ import { encrypt } from "@/lib/crypto";
 import { parseAndValidate } from "@/lib/parse-body";
 import { sanitizeDevice } from "@/lib/device-utils";
 import { writeAudit } from "@/lib/audit";
+import { createHash } from "crypto";
 
 const deviceTypeSchema = z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER", "UNIFI_AP", "OMADA_AP"]);
 
@@ -38,6 +39,22 @@ export async function GET(req: NextRequest) {
       db.device.count({ where }),
     ]);
     return NextResponse.json(devices.map(sanitizeDevice), { headers: { "X-Total-Count": String(total) } });
+  }
+
+  // ETag: cheap aggregate instead of full fetch — only on unfiltered, non-paginated list
+  if (!rawType) {
+    const agg = await db.device.aggregate({ _count: true, _max: { updatedAt: true } });
+    const fingerprint = `${agg._count}:${agg._max.updatedAt?.toISOString() ?? ""}`;
+    const etag = `"${createHash("md5").update(fingerprint).digest("hex")}"`;
+    if (req.headers.get("if-none-match") === etag) {
+      return new NextResponse(null, { status: 304, headers: { ETag: etag } });
+    }
+    const devices = await db.device.findMany({
+      where,
+      include: { currentStatus: true },
+      orderBy: { name: "asc" },
+    });
+    return NextResponse.json(devices.map(sanitizeDevice), { headers: { ETag: etag } });
   }
 
   const devices = await db.device.findMany({

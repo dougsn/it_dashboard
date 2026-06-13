@@ -29,7 +29,7 @@ const mockAuth = auth as jest.MockedFunction<typeof auth>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const note = (db as any).note as Record<string, jest.Mock>;
 
-const FAKE_SESSION = { user: { id: "user-1", name: "admin" }, expires: "2099-01-01" };
+const FAKE_SESSION = { user: { id: "user-1", name: "admin", role: "ADMIN" }, expires: "2099-01-01" };
 const FAKE_PARAMS = Promise.resolve({ id: "note-1" });
 
 const FAKE_NOTE = {
