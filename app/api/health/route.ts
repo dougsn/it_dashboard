@@ -12,6 +12,28 @@ export interface HealthData {
   workerStatus: "ok" | "stale" | "unknown";
 }
 
+// Fire a webhook at most once per hour when the worker is stale.
+// In-process state is acceptable for single-instance deployments.
+const STALE_ALERT_COOLDOWN_MS = 60 * 60_000;
+let lastStaleAlertAt = 0;
+
+async function maybeFireStaleAlert(workerLastSeen: string | null): Promise<void> {
+  const webhookUrl = process.env.WORKER_STALE_WEBHOOK_URL;
+  if (!webhookUrl) return;
+  if (Date.now() - lastStaleAlertAt < STALE_ALERT_COOLDOWN_MS) return;
+
+  lastStaleAlertAt = Date.now();
+  const body = JSON.stringify({
+    text: `⚠️ WatchIT Tower: worker parado ou inativo. Último heartbeat: ${workerLastSeen ?? "nunca"}.`,
+  });
+  // Fire-and-forget; errors are logged but don't affect the health response.
+  fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  }).catch((err) => console.error("[health] erro ao enviar alerta de worker stale:", err));
+}
+
 export async function GET() {
   // SEC-024: rota protegida — expõe métricas operacionais internas
   const unauth = await requireAuth();
@@ -34,11 +56,17 @@ export async function GET() {
     workerStatus = ageMs < 3 * 60_000 ? "ok" : "stale";
   }
 
+  const workerLastSeen = heartbeat?.seenAt.toISOString() ?? null;
+
+  if (workerStatus === "stale") {
+    await maybeFireStaleAlert(workerLastSeen);
+  }
+
   return NextResponse.json({
     totalChecks,
     onlineChecks,
     uptimePct,
-    workerLastSeen: heartbeat?.seenAt.toISOString() ?? null,
+    workerLastSeen,
     workerStatus,
   });
 }

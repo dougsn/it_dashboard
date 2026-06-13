@@ -24,13 +24,13 @@ Itens já concluídos (fases 1–4) foram removidos.
 
 ## Observabilidade
 
-- [ ] Alerta quando `workerStatus === "stale"` detectado em `/api/health` — disparar webhook configurável para notificar worker parado
+- [x] Alerta quando `workerStatus === "stale"` detectado em `/api/health` — webhook configurável via `WORKER_STALE_WEBHOOK_URL`, cooldown de 1h
 
 ---
 
 ## Qualidade de Código
 
-- [ ] Extrair `handleExportPdf` de `app/(dashboard)/reports/page.tsx` para `lib/pdf-export.ts` — ~80 linhas de lógica de domínio dentro de um componente React
+- [x] Extrair `handleExportPdf` de `app/(dashboard)/reports/page.tsx` para `lib/pdf-export.ts` — `exportToPdf(element)` puro, componente virou wrapper de 6 linhas
 
 ---
 

@@ -9,6 +9,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [0.7.0] — 2026-06-13 — Bloco C: PDF Export + Alerta Worker Stale
+
+### Adicionado
+- `lib/pdf-export.ts` com `exportToPdf(element: HTMLElement)` — extração das ~150 linhas de lógica de PDF de `reports/page.tsx`; rasterização de SVG, resolução de cores oklch→rgb e geração html2pdf encapsuladas em função pura
+- `GET /api/health`: alerta de worker stale via webhook configurável (`WORKER_STALE_WEBHOOK_URL`); disparo fire-and-forget com cooldown de 1 hora, sem afetar a resposta da rota
+- `WORKER_STALE_WEBHOOK_URL` documentado no `.env.example`
+
+### Alterado
+- `reports/page.tsx`: `handleExportPdf` reduzido a wrapper de 6 linhas que delega para `exportToPdf`
+
+---
+
 ## [0.6.0] — 2026-06-13 — Bloco A/B: Documentação & Headers de Segurança
 
 ### Adicionado

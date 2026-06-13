@@ -6,6 +6,7 @@ import { ReportView } from "@/components/report-view";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileText, Download, Printer, ChevronDown, Check, X, Loader2, Users, Table2 } from "lucide-react";
 import { DEVICE_TYPE_ICON } from "@/lib/device-constants";
+import { exportToPdf } from "@/lib/pdf-export";
 import type { Device, DeviceStatus } from "@prisma/client";
 import type { DeviceReport } from "@/app/api/reports/route";
 
@@ -169,151 +170,14 @@ export default function ReportsPage() {
     }
   }
 
-  // Convert inline SVGs to PNG <img> using data: URLs (CSP allows data:, not blob:).
-  async function rasterizeSvgs(root: HTMLElement): Promise<() => void> {
-    const svgs = Array.from(root.querySelectorAll<SVGSVGElement>("svg"));
-    console.log("[PDF] SVGs encontrados:", svgs.length);
-    const replacements: { placeholder: HTMLImageElement; parent: Element; svg: SVGSVGElement }[] = [];
-
-    await Promise.all(svgs.map((svg, idx) => new Promise<void>(resolve => {
-      const rect = svg.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) { resolve(); return; }
-
-      const canvas = document.createElement("canvas");
-      const scale = 2;
-      canvas.width = rect.width * scale;
-      canvas.height = rect.height * scale;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { resolve(); return; }
-      ctx.scale(scale, scale);
-
-      const clone = svg.cloneNode(true) as SVGSVGElement;
-      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-      clone.setAttribute("width", String(rect.width));
-      clone.setAttribute("height", String(rect.height));
-
-      const svgStr = new XMLSerializer().serializeToString(clone);
-      // Use data: URL — CSP policy allows data: but blocks blob:
-      const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgStr)}`;
-
-      const img = new Image();
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0);
-        const placeholder = document.createElement("img");
-        placeholder.src = canvas.toDataURL("image/png");
-        placeholder.style.width = `${rect.width}px`;
-        placeholder.style.height = `${rect.height}px`;
-        placeholder.style.display = "block";
-        const parent = svg.parentElement!;
-        parent.insertBefore(placeholder, svg);
-        svg.style.display = "none";
-        replacements.push({ placeholder, parent, svg });
-        console.log(`[PDF] SVG[${idx}] rasterizado: ${Math.round(rect.width)}x${Math.round(rect.height)}px`);
-        resolve();
-      };
-      img.onerror = (e) => { console.error(`[PDF] SVG[${idx}] erro:`, e); resolve(); };
-      img.src = dataUrl;
-    })));
-
-    console.log("[PDF] SVGs rasterizados:", replacements.length);
-    return () => {
-      for (const { placeholder, parent, svg } of replacements) {
-        svg.style.display = "";
-        parent.removeChild(placeholder);
-      }
-    };
-  }
-
-  // Resolve any CSS color string (lab, oklch, lch, etc.) to rgb() via canvas.
-  // The browser's 2D canvas handles all color spaces natively.
-  function makeColorResolver() {
-    const cv = document.createElement("canvas");
-    cv.width = cv.height = 1;
-    const ctx = cv.getContext("2d")!;
-    return (color: string): string => {
-      if (!/lab\(|oklch\(|lch\(/.test(color)) return color;
-      try {
-        ctx.clearRect(0, 0, 1, 1);
-        ctx.fillStyle = color;
-        ctx.fillRect(0, 0, 1, 1);
-        const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-        return a < 255 ? `rgba(${r},${g},${b},${+(a / 255).toFixed(3)})` : `rgb(${r},${g},${b})`;
-      } catch { return color; }
-    };
-  }
-
-  // Apply resolved rgb() colors as inline styles on all elements of the clone.
-  // Firefox's getComputedStyle returns lab() for oklch colors — setting inline rgb()
-  // overrides getComputedStyle so html2canvas never reads a lab() value.
-  function applyRgbInlineColors(root: HTMLElement, resolve: (c: string) => string) {
-    const PROPS = [
-      "color", "background-color",
-      "border-top-color", "border-right-color",
-      "border-bottom-color", "border-left-color",
-    ];
-    const all = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))];
-    let converted = 0;
-    for (const el of all) {
-      const computed = window.getComputedStyle(el);
-      for (const prop of PROPS) {
-        const val = computed.getPropertyValue(prop);
-        if (!val) continue;
-        const rgb = resolve(val);
-        if (rgb !== val) { el.style.setProperty(prop, rgb); converted++; }
-        else el.style.setProperty(prop, val); // set rgb() explicitly anyway
-      }
-    }
-    console.log(`[PDF] ${converted} cores lab/oklch→rgb convertidas em ${all.length} elementos`);
-  }
-
   async function handleExportPdf() {
     if (!reportRef.current) return;
-    console.log("[PDF] iniciando exportação...");
     setExportingPdf(true);
-
-    let pdfContainer: HTMLDivElement | null = null;
-    let restoreSvgs: (() => void) | null = null;
-
     try {
-      const resolve = makeColorResolver();
-
-      // 1. Clone into isolated container at (0,0) — avoids sidebar x-offset in the PDF
-      pdfContainer = document.createElement("div");
-      pdfContainer.style.cssText =
-        "position:fixed;top:0;left:-9999px;width:794px;background:white;pointer-events:none;";
-      const clone = reportRef.current.cloneNode(true) as HTMLElement;
-      pdfContainer.appendChild(clone);
-      document.body.appendChild(pdfContainer);
-
-      // 2. Apply rgb() inline colors so getComputedStyle never returns lab() to html2canvas
-      console.log("[PDF] aplicando cores rgb() inline...");
-      applyRgbInlineColors(clone, resolve);
-
-      // 3. Rasterize SVG charts → PNG (data: URLs bypass CSP blob: restriction)
-      console.log("[PDF] rasterizando gráficos SVG...");
-      restoreSvgs = await rasterizeSvgs(clone);
-
-      // 4. Generate PDF
-      console.log("[PDF] gerando arquivo...");
-      const html2pdf = (await import("html2pdf.js")).default;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pdfOpts: any = {
-        margin: [10, 15, 10, 15],
-        filename: `relatorio-${new Date().toISOString().slice(0, 10)}.pdf`,
-        image: { type: "jpeg", quality: 0.97 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: "css", before: [".pdf-break"], avoid: ["tr"] },
-      };
-      await html2pdf().set(pdfOpts).from(clone).save();
-
-      console.log("[PDF] download iniciado com sucesso");
+      await exportToPdf(reportRef.current);
     } catch (err) {
-      console.error("[PDF] ERRO:", err);
       setError(`Erro ao gerar PDF: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      restoreSvgs?.();
-      if (pdfContainer) document.body.removeChild(pdfContainer);
       setExportingPdf(false);
     }
   }
