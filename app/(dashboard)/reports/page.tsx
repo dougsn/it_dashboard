@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Topbar } from "@/components/topbar";
 import { ReportView } from "@/components/report-view";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, Download, Printer, ChevronDown, Check, X, Loader2, Users } from "lucide-react";
+import { FileText, Download, Printer, ChevronDown, Check, X, Loader2, Users, Table2 } from "lucide-react";
 import { DEVICE_TYPE_ICON } from "@/lib/device-constants";
 import type { Device, DeviceStatus } from "@prisma/client";
 import type { DeviceReport } from "@/app/api/reports/route";
@@ -144,8 +144,8 @@ export default function ReportsPage() {
     loadDevices();
   }, [loadDevices]);
 
-  // Show clients toggle only when at least one UNIFI_AP is selected
-  const hasUnifi = selected.some(id => devices.find(d => d.id === id)?.type === "UNIFI_AP");
+  // Show clients toggle only when at least one UNIFI_AP or OMADA_AP is selected
+  const hasWifi = selected.some(id => ["UNIFI_AP", "OMADA_AP"].includes(devices.find(d => d.id === id)?.type ?? ""));
 
   async function generate() {
     if (selected.length === 0) return;
@@ -318,6 +318,33 @@ export default function ReportsPage() {
     }
   }
 
+  function handleDownloadCsv() {
+    if (!reports) return;
+    const rows: string[] = ["dispositivo,ip,timestamp,online,ping_ms,cpu_pct,mem_pct"];
+    for (const r of reports) {
+      const rosMap = new Map((r.routerosHistory ?? []).map(p => [p.timestamp, p]));
+      for (const p of r.pingHistory) {
+        const ros = rosMap.get(p.timestamp);
+        rows.push([
+          `"${r.device.name.replace(/"/g, '""')}"`,
+          r.device.ip,
+          p.timestamp,
+          p.isOnline ? "1" : "0",
+          p.pingMs ?? "",
+          ros?.cpuLoad ?? "",
+          ros?.memoryUsed ?? "",
+        ].join(","));
+      }
+    }
+    const blob = new Blob([rows.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `logs-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function handleDownloadHtml() {
     if (!reportRef.current) return;
     const style = Array.from(document.styleSheets)
@@ -387,10 +414,10 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* Clients toggle — only shown when a UniFi AP is selected */}
-          {hasUnifi && (
+          {/* Clients toggle — only shown when a UniFi AP or Omada AP is selected */}
+          {hasWifi && (
             <div className="space-y-1.5">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Opções UniFi</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Opções Wi-Fi</p>
               <button
                 onClick={() => setShowClients(v => !v)}
                 className={`h-9 px-3 rounded-lg border text-sm font-medium transition-colors flex items-center gap-2 ${
@@ -430,6 +457,13 @@ export default function ReportsPage() {
               >
                 <Download className="h-4 w-4" />
                 Baixar HTML
+              </button>
+              <button
+                onClick={handleDownloadCsv}
+                className="h-9 px-4 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors flex items-center gap-2"
+              >
+                <Table2 className="h-4 w-4" />
+                Exportar CSV
               </button>
             </>
           )}

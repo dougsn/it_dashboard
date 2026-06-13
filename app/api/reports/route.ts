@@ -79,7 +79,7 @@ function buildIncidents(
   if (history.length === 0) return incidents;
 
   let incidentStart: Date | null = null;
-  if (!history[0].isOnline) incidentStart = since;
+  if (!history[0].isOnline) incidentStart = history[0].timestamp;
 
   for (let i = 1; i < history.length; i++) {
     const prev = history[i - 1];

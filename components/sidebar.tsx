@@ -142,6 +142,7 @@ export function Sidebar({ userName = "Usuário", userRole = "VIEWER" }: { userNa
     linksOnline: 0,
     linksTotal: 0,
   });
+  const [version, setVersion] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadCounts() {
@@ -170,6 +171,13 @@ export function Sidebar({ userName = "Usuário", userRole = "VIEWER" }: { userNa
     loadCounts();
     const interval = setInterval(loadCounts, 30_000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/version")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.build) setVersion(`v${d.version} · build ${d.build}`); })
+      .catch(() => {});
   }, []);
 
   return (
@@ -306,6 +314,11 @@ export function Sidebar({ userName = "Usuário", userRole = "VIEWER" }: { userNa
           </button>
         </div>
       </div>
+      {version && (
+        <div className="pt-2 text-center text-[9.5px] text-muted-foreground/35 font-mono tracking-wide select-none">
+          {version}
+        </div>
+      )}
     </aside>
   );
 }
