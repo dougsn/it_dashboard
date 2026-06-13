@@ -409,7 +409,13 @@ export default function OverviewPage() {
   const totalUnifiClients = devices
     .filter((d) => d.type === "UNIFI_AP" && d.currentStatus?.isOnline)
     .reduce((sum, d) => sum + (((d.currentStatus?.unifiData as { totalClients?: number } | null)?.totalClients) ?? 0), 0);
+  const totalOmadaClients = devices
+    .filter((d) => d.type === "OMADA_AP" && d.currentStatus?.isOnline)
+    .reduce((sum, d) => sum + (((d.currentStatus as { omadaData?: { totalClients?: number } } | null)?.omadaData?.totalClients) ?? 0), 0);
+  const totalWifiClients = totalUnifiClients + totalOmadaClients;
   const unifiAps = devices.filter((d) => d.type === "UNIFI_AP").length;
+  const omadaAps = devices.filter((d) => d.type === "OMADA_AP").length;
+  const totalWifiAps = unifiAps + omadaAps;
   const onlineWithPing = devices.filter((d) => d.currentStatus?.isOnline && d.currentStatus.pingMs != null);
   const avgPing = onlineWithPing.length > 0
     ? Math.round(onlineWithPing.reduce((s, d) => s + (d.currentStatus!.pingMs ?? 0), 0) / onlineWithPing.length)
@@ -474,10 +480,17 @@ export default function OverviewPage() {
             subtitle={pingStatus.label}
             subtitleIcon={pingStatus.label === "Saudável" ? CheckCircle2 : undefined}
             subtitleColor={pingStatus.color} loading={loading} />
-          {unifiAps > 0 && (
-            <KpiCard label="Clientes Wi-Fi" value={totalUnifiClients} icon={Wifi}
+          {totalWifiAps > 0 && (
+            <KpiCard label="Clientes Wi-Fi" value={totalWifiClients} icon={Wifi}
               iconBg="bg-sky-500/10" iconColor="text-sky-500"
-              subtitle={`em ${unifiAps} AP${unifiAps !== 1 ? "s" : ""} UniFi`} loading={loading} />
+              subtitle={
+                unifiAps > 0 && omadaAps > 0
+                  ? `em ${unifiAps} UniFi e ${omadaAps} Omada`
+                  : unifiAps > 0
+                  ? `em ${unifiAps} AP${unifiAps !== 1 ? "s" : ""} UniFi`
+                  : `em ${omadaAps} AP${omadaAps !== 1 ? "s" : ""} Omada`
+              }
+              loading={loading} />
           )}
         </div>
 
@@ -716,7 +729,7 @@ export default function OverviewPage() {
               <WifiOff className="h-3 w-3" />Offline
             </FilterChip>
             <div className="w-px bg-border mx-0.5 self-stretch" />
-            {(["ALL", "MIKROTIK", "UNIFI_AP", "DVR", "CAMERA", "OTHER"] as const).map((t) => (
+            {(["ALL", "MIKROTIK", "OMADA_AP", "UNIFI_AP", "DVR", "CAMERA", "OTHER"] as const).map((t) => (
               <FilterChip key={t} active={filter === t} onClick={() => setFilter(t)}>
                 {TYPE_LABELS[t]}
                 {t !== "ALL" && (
