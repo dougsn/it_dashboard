@@ -8,12 +8,19 @@ import { checkOmada } from "./monitors/omada";
 import { checkLinkTraffic } from "./monitors/link-traffic";
 import { resolveRouterosCredentials, resolveSnmpCommunity, resolveUnifiApiKey, resolveUnifiCredentials, resolveOmadaCredentials } from "../lib/crypto";
 import { log } from "../lib/logger";
+import { sendAlert, isCooldownActive } from "./monitors/alert";
 import type { Device, Link } from "@prisma/client";
 
 const timers          = new Map<string, ReturnType<typeof setInterval>>();
 const deviceSnapshots = new Map<string, Date>(); // deviceId -> last known updatedAt
 const pendingChecks   = new Set<Promise<unknown>>();
 const allIntervals    = new Set<ReturnType<typeof setInterval>>();
+
+// Backoff: after BACKOFF_THRESHOLD consecutive failures, skip ticks until skipUntil[deviceId]
+const consecutiveFailures = new Map<string, number>();
+const skipUntil           = new Map<string, number>(); // deviceId -> epoch ms
+export const BACKOFF_THRESHOLD  = 5;
+export const BACKOFF_MULTIPLIER = 4;
 
 function trackAsync<T>(p: Promise<T>): Promise<T> {
   pendingChecks.add(p);
@@ -31,6 +38,8 @@ export async function shutdown(timeoutMs = 10_000): Promise<void> {
   for (const id of allIntervals) clearInterval(id);
   allIntervals.clear();
   timers.clear();
+  consecutiveFailures.clear();
+  skipUntil.clear();
   const deadline = new Promise<void>((r) => {
     const t = setTimeout(r, timeoutMs);
     if (typeof t === "object" && t !== null && "unref" in t) (t as NodeJS.Timeout).unref();
@@ -38,7 +47,7 @@ export async function shutdown(timeoutMs = 10_000): Promise<void> {
   await Promise.race([Promise.allSettled([...pendingChecks]), deadline]);
 }
 
-export async function runChecks(device: Device) {
+export async function runChecks(device: Device): Promise<boolean> {
   const results = await Promise.allSettled([
     device.pingEnabled ? checkPing(device.ip) : Promise.resolve(null),
     device.httpEnabled
@@ -186,6 +195,8 @@ export async function runChecks(device: Device) {
   } else {
     log("info", `${isOnline ? "✓" : "✗"} ${device.name}`, { ip: device.ip, pingMs: pingMs ?? null });
   }
+
+  return isOnline;
 }
 
 function scheduleDevice(device: Device) {
@@ -197,13 +208,63 @@ function scheduleDevice(device: Device) {
 
   const intervalMs = device.checkInterval * 1000;
 
-  const safeRun = () => runChecks(device).catch((err: unknown) => {
-    log("error", "[Scheduler] runChecks falhou", {
-      device: device.name, ip: device.ip,
-      error: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack?.split("\n").slice(0, 3).join(" | ") : undefined,
-    });
-  });
+  const safeRun = async () => {
+    // Skip this tick if device is in exponential backoff cooldown
+    const skipTs = skipUntil.get(device.id);
+    if (skipTs && Date.now() < skipTs) return;
+
+    try {
+      const isOnline = await runChecks(device);
+      if (isOnline) {
+        const prev = consecutiveFailures.get(device.id) ?? 0;
+        consecutiveFailures.set(device.id, 0);
+        skipUntil.delete(device.id);
+        if (prev >= BACKOFF_THRESHOLD) {
+          log("info", "[Backoff] dispositivo recuperado, voltando ao intervalo normal", { device: device.name });
+        }
+      } else {
+        const fails = (consecutiveFailures.get(device.id) ?? 0) + 1;
+        consecutiveFailures.set(device.id, fails);
+        if (fails >= BACKOFF_THRESHOLD) {
+          skipUntil.set(device.id, Date.now() + device.checkInterval * BACKOFF_MULTIPLIER * 1000);
+          if (fails === BACKOFF_THRESHOLD) {
+            log("warn", "[Backoff] 5 falhas consecutivas, reduzindo frequência", {
+              device: device.name, ip: device.ip,
+              novoIntervaloSecs: device.checkInterval * BACKOFF_MULTIPLIER,
+            });
+          }
+        }
+        // Fire alert if threshold reached and webhook is configured
+        if (device.alertWebhookUrl && fails === device.alertThreshold) {
+          const lastAlert = await db.device.findUnique({ where: { id: device.id }, select: { lastAlertAt: true } });
+          if (!isCooldownActive(lastAlert?.lastAlertAt ?? null)) {
+            try {
+              await sendAlert(device.alertWebhookUrl, {
+                deviceId:   device.id,
+                deviceName: device.name,
+                deviceIp:   device.ip,
+                deviceType: device.type,
+                failCount:  fails,
+                timestamp:  new Date().toISOString(),
+              });
+              await db.device.update({ where: { id: device.id }, data: { lastAlertAt: new Date() } });
+            } catch (alertErr: unknown) {
+              log("error", "[Alerta] falha ao enviar webhook", {
+                device: device.name,
+                error: alertErr instanceof Error ? alertErr.message : String(alertErr),
+              });
+            }
+          }
+        }
+      }
+    } catch (err: unknown) {
+      log("error", "[Scheduler] runChecks falhou", {
+        device: device.name, ip: device.ip,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack?.split("\n").slice(0, 3).join(" | ") : undefined,
+      });
+    }
+  };
 
   void trackAsync(safeRun());
 
@@ -218,6 +279,8 @@ function unscheduleDevice(deviceId: string) {
     allIntervals.delete(timer);
     timers.delete(deviceId);
     deviceSnapshots.delete(deviceId);
+    consecutiveFailures.delete(deviceId);
+    skipUntil.delete(deviceId);
   }
 }
 

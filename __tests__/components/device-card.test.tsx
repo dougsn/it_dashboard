@@ -49,7 +49,10 @@ const baseDevice = {
   omadaSiteId:          null,
   omadaTlsVerify:       true,
   omadaControllerIp:    null,
-  checkInterval: 60,
+  checkInterval:   60,
+  alertWebhookUrl: null,
+  alertThreshold:  3,
+  lastAlertAt:     null,
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
 };

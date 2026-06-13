@@ -58,6 +58,11 @@ model Device {
 
   checkInterval Int @default(60)
 
+  // Alert notifications
+  alertWebhookUrl String?
+  alertThreshold  Int      @default(3) // consecutive failures before firing alert
+  lastAlertAt     DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

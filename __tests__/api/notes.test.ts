@@ -17,6 +17,7 @@ jest.mock("@/lib/db", () => ({
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      count: jest.fn(),
     },
   },
 }));
@@ -50,9 +51,12 @@ beforeEach(() => {
 });
 
 describe("GET /api/notes", () => {
+  const makeGetReq = (url = "http://localhost/api/notes") =>
+    new NextRequest(url);
+
   it("returns 401 when not authenticated", async () => {
     mockAuth.mockResolvedValue(null as never);
-    const res = await GET();
+    const res = await GET(makeGetReq());
     expect(res.status).toBe(401);
   });
 
@@ -60,7 +64,7 @@ describe("GET /api/notes", () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
     note.findMany.mockResolvedValue([FAKE_NOTE]);
 
-    const res = await GET();
+    const res = await GET(makeGetReq());
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data).toHaveLength(1);

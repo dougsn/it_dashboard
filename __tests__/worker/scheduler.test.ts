@@ -10,7 +10,7 @@ jest.mock("@/lib/db", () => ({
     statusHistory:   { create: jest.fn(), deleteMany: jest.fn() },
     linkEvent:       { deleteMany: jest.fn() },
     link:            { findMany: jest.fn(), update: jest.fn() },
-    device:          { findMany: jest.fn(), findUnique: jest.fn() },
+    device:          { findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     workerHeartbeat: { upsert: jest.fn() },
     systemConfig:    { upsert: jest.fn(), update: jest.fn() },
     $transaction:    jest.fn(),
@@ -37,7 +37,7 @@ import { checkSnmp }        from "@/worker/monitors/snmp";
 import { checkRouterOS }    from "@/worker/monitors/routeros";
 import { checkLinkTraffic } from "@/worker/monitors/link-traffic";
 import { resolveRouterosCredentials } from "@/lib/crypto";
-import { runChecks, pruneHistory, pollLinks, shutdown } from "@/worker/scheduler";
+import { runChecks, pruneHistory, pollLinks, shutdown, BACKOFF_THRESHOLD, BACKOFF_MULTIPLIER } from "@/worker/scheduler";
 
 const mockDb                     = db as jest.Mocked<typeof db>;
 const mockCheckPing               = checkPing        as jest.Mock;
@@ -84,6 +84,9 @@ const baseDevice: Device = {
   omadaTlsVerify:       true,
   omadaControllerIp:    null,
   checkInterval:   60,
+  alertWebhookUrl: null,
+  alertThreshold:  3,
+  lastAlertAt:     null,
   createdAt:       new Date("2026-01-01"),
   updatedAt:       new Date("2026-01-01"),
 };
@@ -199,6 +202,39 @@ describe("runChecks", () => {
       expect.stringContaining("[RouterOS]")
     );
     expect(mockDb.$transaction).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── runChecks return value ───────────────────────────────────────────────────
+
+describe("runChecks return value", () => {
+  it("returns true when ping is alive", async () => {
+    mockCheckPing.mockResolvedValue({ alive: true, responseMs: 10 });
+    const result = await runChecks(baseDevice);
+    expect(result).toBe(true);
+  });
+
+  it("returns false when ping is not alive", async () => {
+    mockCheckPing.mockResolvedValue({ alive: false, responseMs: null });
+    const result = await runChecks(baseDevice);
+    expect(result).toBe(false);
+  });
+
+  it("returns false when no monitor is enabled", async () => {
+    const result = await runChecks({ ...baseDevice, pingEnabled: false });
+    expect(result).toBe(false);
+  });
+});
+
+// ─── BACKOFF_THRESHOLD / BACKOFF_MULTIPLIER constants ─────────────────────────
+
+describe("backoff constants", () => {
+  it("exports BACKOFF_THRESHOLD = 5", () => {
+    expect(BACKOFF_THRESHOLD).toBe(5);
+  });
+
+  it("exports BACKOFF_MULTIPLIER = 4", () => {
+    expect(BACKOFF_MULTIPLIER).toBe(4);
   });
 });
 

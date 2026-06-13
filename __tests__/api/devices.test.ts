@@ -13,6 +13,7 @@ jest.mock("@/lib/db", () => ({
     device: {
       findMany: jest.fn(),
       create: jest.fn(),
+      count: jest.fn(),
     },
   },
 }));

@@ -59,7 +59,9 @@ const schema = z.object({
   omadaSiteId:       z.string().optional().nullable(),
   omadaTlsVerify:    z.boolean(),
   omadaControllerIp: z.string().optional().nullable(),
-  checkInterval: z.number().min(10).max(3600),
+  checkInterval:   z.number().min(10).max(3600),
+  alertWebhookUrl: z.string().url("URL inválida").or(z.literal("")).optional().nullable(),
+  alertThreshold:  z.number().int().min(1).max(100),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -117,7 +119,9 @@ export function DeviceForm({ device }: DeviceFormProps) {
           omadaSiteId:       device.omadaSiteId ?? "",
           omadaTlsVerify:    device.omadaTlsVerify,
           omadaControllerIp: device.omadaControllerIp ?? "",
-          checkInterval: device.checkInterval,
+          checkInterval:   device.checkInterval,
+          alertWebhookUrl: device.alertWebhookUrl ?? "",
+          alertThreshold:  device.alertThreshold ?? 3,
         }
       : {
           type: "MIKROTIK",
@@ -144,7 +148,9 @@ export function DeviceForm({ device }: DeviceFormProps) {
           omadaSiteId:       "",
           omadaTlsVerify:    true,
           omadaControllerIp: "",
-          checkInterval: 60,
+          checkInterval:   60,
+          alertWebhookUrl: "",
+          alertThreshold:  3,
         },
   });
 
@@ -343,6 +349,30 @@ export function DeviceForm({ device }: DeviceFormProps) {
               max={3600}
               {...register("checkInterval", { valueAsNumber: true })}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="alertWebhookUrl">Webhook de alerta (opcional)</Label>
+            <Input
+              id="alertWebhookUrl"
+              type="url"
+              placeholder="https://hooks.slack.com/services/..."
+              {...register("alertWebhookUrl")}
+            />
+            {errors.alertWebhookUrl && <p className="text-xs text-destructive">{errors.alertWebhookUrl.message}</p>}
+            <p className="text-xs text-muted-foreground">URL que recebe um POST JSON quando o dispositivo fica offline por N checks consecutivos.</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="alertThreshold">Checks falhos antes do alerta</Label>
+            <Input
+              id="alertThreshold"
+              type="number"
+              min={1}
+              max={100}
+              {...register("alertThreshold", { valueAsNumber: true })}
+            />
+            {errors.alertThreshold && <p className="text-xs text-destructive">{errors.alertThreshold.message}</p>}
           </div>
         </CardContent>
       </Card>

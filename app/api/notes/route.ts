@@ -14,17 +14,47 @@ const noteSchema = z.object({
   deviceId: z.string().optional().nullable(),
 });
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const unauth = await requireAuth();
   if (unauth) return unauth;
-  const notes = await db.note.findMany({
-    include: { device: { select: { id: true, name: true, ip: true } } },
-    orderBy: [
-      { severity: "desc" },
-      { createdAt: "desc" },
-    ],
-  });
+  const { searchParams } = new URL(req.url);
+  const rawPage     = searchParams.get("page");
+  const rawLimit    = searchParams.get("limit");
+  const rawSeverity = searchParams.get("severity");
+  const rawStatus   = searchParams.get("status");
 
+  const severitySchema = z.enum(["INFO", "WARNING", "HIGH", "CRITICAL"]);
+  const statusSchema   = z.enum(["OPEN", "IN_PROGRESS", "RESOLVED"]);
+
+  const severityFilter = rawSeverity ? severitySchema.safeParse(rawSeverity) : null;
+  if (severityFilter && !severityFilter.success) {
+    return NextResponse.json({ error: "Severity inválido" }, { status: 400 });
+  }
+  const statusFilter = rawStatus ? statusSchema.safeParse(rawStatus) : null;
+  if (statusFilter && !statusFilter.success) {
+    return NextResponse.json({ error: "Status inválido" }, { status: 400 });
+  }
+
+  const where = {
+    ...(severityFilter?.success ? { severity: severityFilter.data } : {}),
+    ...(statusFilter?.success   ? { status:   statusFilter.data   } : {}),
+  };
+  const orderBy = [{ severity: "desc" as const }, { createdAt: "desc" as const }];
+  const include = { device: { select: { id: true, name: true, ip: true } } };
+
+  const paginate = rawPage !== null || rawLimit !== null;
+  const limit = Math.min(Math.max(parseInt(rawLimit ?? "50", 10) || 50, 1), 200);
+  const page  = Math.max(parseInt(rawPage  ?? "1",  10) || 1, 1);
+
+  if (paginate) {
+    const [notes, total] = await Promise.all([
+      db.note.findMany({ where, include, orderBy, skip: (page - 1) * limit, take: limit }),
+      db.note.count({ where }),
+    ]);
+    return NextResponse.json(notes, { headers: { "X-Total-Count": String(total) } });
+  }
+
+  const notes = await db.note.findMany({ where, include, orderBy });
   return NextResponse.json(notes);
 }
 
