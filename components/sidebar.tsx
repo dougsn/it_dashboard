@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Server, Network, StickyNote, LogOut, AlertCircle, FileText, RadioTower, Wifi, Router, Users, Settings, ClipboardList } from "lucide-react";
+import { LayoutDashboard, Server, Network, StickyNote, LogOut, AlertCircle, FileText, RadioTower, Wifi, Router, Users, Settings, ClipboardList, History } from "lucide-react";
 
 interface SidebarCounts {
   devicesTotal: number;
@@ -268,6 +268,13 @@ export function Sidebar({ userName = "Usuário", userRole = "VIEWER" }: { userNa
           label="Notas & Segurança"
           icon={StickyNote}
           active={pathname.startsWith("/notes")}
+        />
+
+        <NavItem
+          href="/changelog"
+          label="Changelog"
+          icon={History}
+          active={pathname.startsWith("/changelog")}
         />
 
         {userRole === "ADMIN" && (
