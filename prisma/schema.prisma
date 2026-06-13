@@ -32,8 +32,6 @@ model Device {
   snmpCommunity   String  @default("public")
   snmpPort        Int     @default(161)
   routerosEnabled Boolean @default(false)
-  routerosUser    String? // plaintext — deprecated, nulled after migrate:credentials
-  routerosPass    String? // plaintext — deprecated, nulled after migrate:credentials
   routerosUserEnc String? // AES-256-GCM encrypted
   routerosPassEnc String? // AES-256-GCM encrypted
   routerosPort    Int     @default(8728)

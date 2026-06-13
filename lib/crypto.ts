@@ -32,16 +32,12 @@ export function decrypt(stored: string): string {
   return decipher.update(Buffer.from(dataHex, "hex")).toString("utf8") + decipher.final("utf8");
 }
 
-// Resolves credentials from a device, preferring encrypted columns (post-migration)
-// and falling back to plaintext columns (pre-migration). Returns null if none set.
 export function resolveRouterosCredentials(device: {
-  routerosUser:    string | null;
-  routerosPass:    string | null;
   routerosUserEnc: string | null;
   routerosPassEnc: string | null;
 }): { user: string; pass: string } | null {
-  const user = device.routerosUserEnc ? decrypt(device.routerosUserEnc) : device.routerosUser;
-  const pass = device.routerosPassEnc ? decrypt(device.routerosPassEnc) : device.routerosPass;
+  const user = device.routerosUserEnc ? decrypt(device.routerosUserEnc) : null;
+  const pass = device.routerosPassEnc ? decrypt(device.routerosPassEnc) : null;
   if (!user || !pass) return null;
   return { user, pass };
 }

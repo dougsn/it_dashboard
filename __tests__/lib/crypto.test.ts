@@ -57,66 +57,36 @@ describe("encrypt / decrypt", () => {
 
 describe("resolveRouterosCredentials", () => {
   it("returns decrypted credentials when enc columns are set", () => {
-    const user = encrypt("admin");
-    const pass = encrypt("pass123");
     const result = resolveRouterosCredentials({
-      routerosUser: null,
-      routerosPass: null,
-      routerosUserEnc: user,
-      routerosPassEnc: pass,
+      routerosUserEnc: encrypt("admin"),
+      routerosPassEnc: encrypt("pass123"),
     });
     expect(result).toEqual({ user: "admin", pass: "pass123" });
   });
 
-  it("falls back to plaintext when enc columns are null", () => {
-    const result = resolveRouterosCredentials({
-      routerosUser: "admin",
-      routerosPass: "pass123",
-      routerosUserEnc: null,
-      routerosPassEnc: null,
-    });
-    expect(result).toEqual({ user: "admin", pass: "pass123" });
-  });
-
-  it("prefers enc over plaintext when both are set", () => {
-    const result = resolveRouterosCredentials({
-      routerosUser: "old-admin",
-      routerosPass: "old-pass",
-      routerosUserEnc: encrypt("new-admin"),
-      routerosPassEnc: encrypt("new-pass"),
-    });
-    expect(result).toEqual({ user: "new-admin", pass: "new-pass" });
-  });
-
-  it("returns null when all fields are null", () => {
+  it("returns null when both enc columns are null", () => {
     expect(
       resolveRouterosCredentials({
-        routerosUser: null,
-        routerosPass: null,
         routerosUserEnc: null,
         routerosPassEnc: null,
       })
     ).toBeNull();
   });
 
-  it("returns null when only user is set (no pass)", () => {
+  it("returns null when only user enc is set (no pass)", () => {
     expect(
       resolveRouterosCredentials({
-        routerosUser: "admin",
-        routerosPass: null,
-        routerosUserEnc: null,
+        routerosUserEnc: encrypt("admin"),
         routerosPassEnc: null,
       })
     ).toBeNull();
   });
 
-  it("returns null when only pass is set (no user)", () => {
+  it("returns null when only pass enc is set (no user)", () => {
     expect(
       resolveRouterosCredentials({
-        routerosUser: null,
-        routerosPass: "pass123",
         routerosUserEnc: null,
-        routerosPassEnc: null,
+        routerosPassEnc: encrypt("pass123"),
       })
     ).toBeNull();
   });

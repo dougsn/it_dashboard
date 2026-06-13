@@ -24,13 +24,8 @@ const makeEntry = (overrides: Partial<StatusHistory>): StatusHistory => ({
   deviceId: "device-1",
   isOnline: true,
   pingMs: null,
-  httpOk: null,
-  uptime: null,
   cpuLoad: null,
   memoryUsed: null,
-  snmpData: null,
-  unifiData: null,
-  unifiError: null,
   timestamp: new Date("2026-01-01T10:00:00"),
   ...overrides,
 });

@@ -23,7 +23,7 @@ import { db } from "@/lib/db";
 const mockAuth = auth as jest.MockedFunction<typeof auth>;
 const mockDb = db as jest.Mocked<typeof db>;
 
-const FAKE_SESSION = { user: { id: "user-1", name: "admin" }, expires: "2099-01-01" };
+const FAKE_SESSION = { user: { id: "user-1", name: "admin", role: "ADMIN" }, expires: "2099-01-01" };
 
 const FAKE_DEVICE = {
   id: "device-1",
@@ -40,8 +40,6 @@ const FAKE_DEVICE = {
   snmpCommunity: "public",
   snmpPort: 161,
   routerosEnabled: false,
-  routerosUser: null,
-  routerosPass: null,
   routerosUserEnc: null,
   routerosPassEnc: null,
   routerosPort: 8728,

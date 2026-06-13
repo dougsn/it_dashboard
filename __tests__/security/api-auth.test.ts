@@ -96,7 +96,7 @@ describe("Input validation security", () => {
       id: "d1", name: "A".repeat(10000), ip: "1.2.3.4", type: "OTHER",
       location: null, notes: null, pingEnabled: true, httpEnabled: false,
       httpPort: null, httpPath: "/", snmpEnabled: false, snmpCommunity: "public",
-      snmpPort: 161, routerosEnabled: false, routerosUser: null, routerosPass: null,
+      snmpPort: 161, routerosEnabled: false,
       routerosUserEnc: null, routerosPassEnc: null,
       routerosPort: 8728, unifiEnabled: false, unifiAuthMethod: "apikey",
       unifiApiKeyEnc: null, unifiUserEnc: null, unifiPassEnc: null,

@@ -1,4 +1,4 @@
-import { render, container as globalContainer } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { SkeletonList } from "@/components/skeleton-list";
 
 describe("SkeletonList", () => {

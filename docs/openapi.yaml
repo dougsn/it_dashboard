@@ -1915,6 +1915,342 @@ paths:
                   value:
                     error: 'Interface "eth0" não encontrada em Mikrotik Matriz — verifique o nome exato (ex: ether1, sfp-sfpplus1, bridge)'
 
+  # ── Relatórios ───────────────────────────────────────────────────────────
+  /api/reports:
+    get:
+      tags: [Status]
+      summary: Relatório de disponibilidade por dispositivo
+      description: |
+        Retorna um relatório detalhado para um ou mais dispositivos com:
+        - **Resumo:** uptime%, total de checks, contagem de incidentes, downtime total, ping médio/min/max
+        - **Insights:** alertas automáticos (uptime crítico, ping elevado, etc.)
+        - **Histórico de ping:** série temporal de `isOnline` e `pingMs`
+        - **Histórico RouterOS:** série temporal de CPU e memória (apenas para MIKROTIK com RouterOS habilitado)
+        - **Incidentes:** períodos de indisponibilidade com duração
+
+        Máximo de 10 dispositivos por requisição.
+      parameters:
+        - in: query
+          name: devices
+          required: true
+          schema:
+            type: string
+          description: IDs dos dispositivos separados por vírgula.
+          example: "clxyz123,clxyz456"
+        - in: query
+          name: hours
+          schema:
+            type: integer
+            default: 168
+            minimum: 1
+            maximum: 720
+          description: Janela de tempo em horas (máximo 720h = 30 dias). Padrão 168h (7 dias).
+      responses:
+        "200":
+          description: Relatórios gerados com sucesso (um por dispositivo).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    device:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        type:
+                          $ref: "#/components/schemas/DeviceType"
+                        ip:
+                          type: string
+                        location:
+                          type: string
+                          nullable: true
+                    period:
+                      type: object
+                      properties:
+                        from:
+                          type: string
+                          format: date-time
+                        to:
+                          type: string
+                          format: date-time
+                        hours:
+                          type: integer
+                    summary:
+                      type: object
+                      properties:
+                        uptimePct:
+                          type: number
+                          format: float
+                          description: Percentual de uptime (0–100).
+                          example: 99.31
+                        totalChecks:
+                          type: integer
+                          example: 10080
+                        onlineChecks:
+                          type: integer
+                          example: 10010
+                        incidentCount:
+                          type: integer
+                          example: 2
+                        totalDowntimeMs:
+                          type: integer
+                          description: Tempo total offline em milissegundos.
+                          example: 4200000
+                        avgPingMs:
+                          type: number
+                          nullable: true
+                          example: 3.2
+                        maxPingMs:
+                          type: number
+                          nullable: true
+                          example: 210
+                        minPingMs:
+                          type: number
+                          nullable: true
+                          example: 1
+                    insights:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          level:
+                            type: string
+                            enum: [ok, warn, critical]
+                          text:
+                            type: string
+                            example: "Uptime crítico: 72.3% nas últimas 168h"
+                    pingHistory:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          timestamp:
+                            type: string
+                            format: date-time
+                          pingMs:
+                            type: integer
+                            nullable: true
+                          isOnline:
+                            type: boolean
+                    routerosHistory:
+                      type: array
+                      nullable: true
+                      items:
+                        type: object
+                        properties:
+                          timestamp:
+                            type: string
+                            format: date-time
+                          cpuLoad:
+                            type: number
+                            nullable: true
+                          memoryUsed:
+                            type: number
+                            nullable: true
+                    incidents:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          startAt:
+                            type: string
+                            format: date-time
+                          endAt:
+                            type: string
+                            format: date-time
+                            nullable: true
+                          durationMs:
+                            type: integer
+                            nullable: true
+                          resolved:
+                            type: boolean
+        "400":
+          description: Parâmetros inválidos (nenhum dispositivo informado ou limite de 10 excedido).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Live traffic ──────────────────────────────────────────────────────────
+  /api/links/{id}/live-traffic:
+    parameters:
+      - $ref: "#/components/parameters/LinkId"
+    get:
+      tags: [Links]
+      summary: Medir tráfego ao vivo de um link
+      description: |
+        Executa uma medição de tráfego em tempo real na interface RouterOS configurada no link.
+        Conecta ao Mikrotik, lê `rx-byte`/`tx-byte` de `/interface/print` duas vezes com 1 segundo
+        de intervalo e calcula `(Δbytes × 8)` para obter bits/segundo.
+
+        **Atenção:** este endpoint faz uma conexão real ao Mikrotik e leva ~1,5s para responder.
+      responses:
+        "200":
+          description: Medição concluída com sucesso.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  downloadBps:
+                    type: integer
+                    description: Download em bits/segundo.
+                    example: 127500000
+                  uploadBps:
+                    type: integer
+                    description: Upload em bits/segundo.
+                    example: 8300000
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: Momento da medição.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Link sem Mikrotik configurado, sem credenciais ou falha na conexão.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                sem_mikrotik:
+                  summary: Interface não configurada
+                  value:
+                    error: "Este link não tem Mikrotik ou interface configurados"
+                sem_credenciais:
+                  summary: Sem credenciais RouterOS
+                  value:
+                    error: "Dispositivo \"Mikrotik Matriz\" não tem credenciais RouterOS configuradas"
+                conexao_falhou:
+                  summary: Falha na conexão
+                  value:
+                    error: "Falha ao medir tráfego: connect ECONNREFUSED 192.168.1.1:8728"
+
+  /api/devices/test-unifi:
+    post:
+      tags: [Dispositivos]
+      summary: Testar conexão UniFi e listar sites
+      description: |
+        Valida as credenciais do UniFi Controller e retorna informações básicas do AP.
+        Suporta dois métodos de autenticação:
+        - **apikey** — Integration API via `X-API-KEY` (recomendado; disponível no UniFi Network 8+)
+        - **userpass** — Inform API via usuário/senha (acesso a RSSI, SSID e canal por cliente)
+
+        **Resolução de credenciais:**
+        - Se as credenciais forem enviadas no body, são usadas diretamente.
+        - Se `deviceId` for fornecido sem credenciais, as credenciais armazenadas são descriptografadas do banco.
+        - Requer perfil OPERADOR ou superior.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [controllerIp, port, site, tlsVerify, authMethod]
+              properties:
+                controllerIp:
+                  type: string
+                  format: ipv4
+                  description: IP do UniFi Controller.
+                  example: "192.168.1.200"
+                port:
+                  type: integer
+                  minimum: 1
+                  maximum: 65535
+                  default: 443
+                  description: Porta HTTPS do controller.
+                site:
+                  type: string
+                  description: Nome ou ID do site no controller.
+                  default: "default"
+                  example: "default"
+                tlsVerify:
+                  type: boolean
+                  description: Se deve validar o certificado TLS (false para certificados autoassinados).
+                  example: false
+                authMethod:
+                  type: string
+                  enum: [apikey, userpass]
+                  default: "apikey"
+                  description: Método de autenticação.
+                apiKey:
+                  type: string
+                  description: Chave de API (necessária se authMethod=apikey sem deviceId).
+                unifiUser:
+                  type: string
+                  description: Usuário (necessário se authMethod=userpass sem deviceId).
+                unifiPass:
+                  type: string
+                  description: Senha (necessária se authMethod=userpass sem deviceId).
+                deviceId:
+                  type: string
+                  description: ID de um UNIFI_AP existente para reutilizar credenciais armazenadas.
+      responses:
+        "200":
+          description: Autenticação bem-sucedida. Retorna lista de sites disponíveis.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  sites:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: ID do site.
+                          example: "default"
+                        name:
+                          type: string
+                          description: Nome do site.
+                          example: "Default"
+                  message:
+                    type: string
+                    example: "Autenticado via Integration API. 1 site(s) disponível(is)."
+        "400":
+          description: Parâmetros inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Perfil insuficiente — requer OPERADOR ou superior.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Credenciais ausentes ou falha na conexão com o controller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                sem_credenciais:
+                  summary: Credenciais não fornecidas
+                  value:
+                    error: "Informe apiKey ou unifiUser/unifiPass para testar a conexão"
+                auth_falhou:
+                  summary: Credenciais inválidas
+                  value:
+                    error: "Autenticação falhou — verifique as credenciais"
+
   # ── Notas ─────────────────────────────────────────────────────────────────
   /api/notes:
     get:

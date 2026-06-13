@@ -28,8 +28,6 @@ const baseDevice = {
   snmpCommunity: "public",
   snmpPort: 161,
   routerosEnabled: false,
-  routerosUser: null,
-  routerosPass: null,
   routerosUserEnc: null,
   routerosPassEnc: null,
   routerosPort: 8728,

@@ -28,8 +28,8 @@ export const deviceConfigSchema = z.object({
   snmpCommunity: z.string().default("public"),
   snmpPort: z.number().int().min(1).max(65535).default(161),
   routerosEnabled: z.boolean().default(false),
-  routerosUser: z.string().optional().nullable(),
-  routerosPass: z.string().optional().nullable(),
+  routerosUser: z.string().optional().nullable(), // input only — never persisted, always encrypted to routerosUserEnc
+  routerosPass: z.string().optional().nullable(), // input only — never persisted, always encrypted to routerosPassEnc
   routerosPort: z.number().int().min(1).max(65535).default(8728),
   unifiEnabled: z.boolean().default(false),
   unifiAuthMethod: z.enum(["apikey", "userpass"]).default("apikey"),
