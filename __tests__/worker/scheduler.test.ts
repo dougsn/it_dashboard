@@ -10,8 +10,9 @@ jest.mock("@/lib/db", () => ({
     statusHistory:   { create: jest.fn(), deleteMany: jest.fn() },
     linkEvent:       { deleteMany: jest.fn() },
     link:            { findMany: jest.fn(), update: jest.fn() },
-    device:          { findMany: jest.fn(), findUnique: jest.fn() },
+    device:          { findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     workerHeartbeat: { upsert: jest.fn() },
+    systemConfig:    { upsert: jest.fn(), update: jest.fn() },
     $transaction:    jest.fn(),
   },
 }));
@@ -24,6 +25,7 @@ jest.mock("@/worker/monitors/unifi",        () => ({ checkUnifi:       jest.fn()
 jest.mock("@/worker/monitors/link-traffic", () => ({ checkLinkTraffic: jest.fn() }));
 jest.mock("@/lib/crypto", () => ({
   resolveRouterosCredentials: jest.fn(),
+  resolveSnmpCommunity:       jest.fn().mockReturnValue("public"),
   resolveUnifiApiKey:         jest.fn(),
   resolveUnifiCredentials:    jest.fn(),
 }));
@@ -35,7 +37,7 @@ import { checkSnmp }        from "@/worker/monitors/snmp";
 import { checkRouterOS }    from "@/worker/monitors/routeros";
 import { checkLinkTraffic } from "@/worker/monitors/link-traffic";
 import { resolveRouterosCredentials } from "@/lib/crypto";
-import { runChecks, pruneHistory, pollLinks, shutdown } from "@/worker/scheduler";
+import { runChecks, pruneHistory, pollLinks, shutdown, BACKOFF_THRESHOLD, BACKOFF_MULTIPLIER } from "@/worker/scheduler";
 
 const mockDb                     = db as jest.Mocked<typeof db>;
 const mockCheckPing               = checkPing        as jest.Mock;
@@ -58,6 +60,7 @@ const baseDevice: Device = {
   httpPath:        "/",
   snmpEnabled:     false,
   snmpCommunity:   "public",
+  snmpCommunityEnc: null,
   snmpPort:        161,
   routerosEnabled: false,
   routerosUserEnc: null,
@@ -81,6 +84,9 @@ const baseDevice: Device = {
   omadaTlsVerify:       true,
   omadaControllerIp:    null,
   checkInterval:   60,
+  alertWebhookUrl: null,
+  alertThreshold:  3,
+  lastAlertAt:     null,
   createdAt:       new Date("2026-01-01"),
   updatedAt:       new Date("2026-01-01"),
 };
@@ -93,6 +99,8 @@ beforeEach(() => {
   (mockDb.$transaction as jest.Mock).mockResolvedValue([]);
   (mockDb.deviceStatus.upsert as jest.Mock).mockResolvedValue({});
   (mockDb.statusHistory.create as jest.Mock).mockResolvedValue({});
+  (mockDb.systemConfig.upsert as jest.Mock).mockResolvedValue({ id: 1, statusHistoryDays: 30, linkEventDays: 90, lastCleanupAt: null });
+  (mockDb.systemConfig.update as jest.Mock).mockResolvedValue({});
 });
 
 afterEach(() => {
@@ -197,6 +205,39 @@ describe("runChecks", () => {
   });
 });
 
+// ─── runChecks return value ───────────────────────────────────────────────────
+
+describe("runChecks return value", () => {
+  it("returns true when ping is alive", async () => {
+    mockCheckPing.mockResolvedValue({ alive: true, responseMs: 10 });
+    const result = await runChecks(baseDevice);
+    expect(result).toBe(true);
+  });
+
+  it("returns false when ping is not alive", async () => {
+    mockCheckPing.mockResolvedValue({ alive: false, responseMs: null });
+    const result = await runChecks(baseDevice);
+    expect(result).toBe(false);
+  });
+
+  it("returns false when no monitor is enabled", async () => {
+    const result = await runChecks({ ...baseDevice, pingEnabled: false });
+    expect(result).toBe(false);
+  });
+});
+
+// ─── BACKOFF_THRESHOLD / BACKOFF_MULTIPLIER constants ─────────────────────────
+
+describe("backoff constants", () => {
+  it("exports BACKOFF_THRESHOLD = 5", () => {
+    expect(BACKOFF_THRESHOLD).toBe(5);
+  });
+
+  it("exports BACKOFF_MULTIPLIER = 4", () => {
+    expect(BACKOFF_MULTIPLIER).toBe(4);
+  });
+});
+
 // ─── pruneHistory ─────────────────────────────────────────────────────────────
 
 describe("pruneHistory", () => {
@@ -216,19 +257,20 @@ describe("pruneHistory", () => {
     expect(mockDb.linkEvent.deleteMany).toHaveBeenCalledTimes(1);
   });
 
-  it("uses a cutoff 30 days in the past", async () => {
+  it("uses correct cutoffs (30d for statusHistory, 90d for linkEvent)", async () => {
     const now = new Date("2026-06-05T12:00:00Z").getTime();
     jest.setSystemTime(now);
 
     await pruneHistory();
 
-    const expectedCutoff = new Date(now - 30 * 24 * 3_600_000);
+    const historyCutoff = new Date(now - 30 * 24 * 3_600_000);
+    const eventCutoff   = new Date(now - 90 * 24 * 3_600_000);
 
     expect(mockDb.statusHistory.deleteMany).toHaveBeenCalledWith({
-      where: { timestamp: { lt: expectedCutoff } },
+      where: { timestamp: { lt: historyCutoff } },
     });
     expect(mockDb.linkEvent.deleteMany).toHaveBeenCalledWith({
-      where: { timestamp: { lt: expectedCutoff } },
+      where: { timestamp: { lt: eventCutoff } },
     });
   });
 

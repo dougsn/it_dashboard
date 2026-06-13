@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { requireAuth, requireRole } from "@/lib/with-auth";
@@ -18,20 +18,32 @@ const createSchema = z.object({
   contractedUploadBps: z.number().int().positive().optional().nullable(),
 });
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const unauth = await requireAuth();
   if (unauth) return unauth;
-  const links = await db.link.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { _count: { select: { events: true } } },
-  });
+  const { searchParams } = new URL(req.url);
+  const rawPage  = searchParams.get("page");
+  const rawLimit = searchParams.get("limit");
 
-  const withTokens = links.map((link) => ({
-    ...link,
-    webhookToken: generateWebhookToken(link.id),
-  }));
+  const orderBy = { createdAt: "desc" as const };
+  const include = { _count: { select: { events: true } } };
+  const addTokens = (links: Awaited<ReturnType<typeof db.link.findMany>>) =>
+    links.map((link) => ({ ...link, webhookToken: generateWebhookToken(link.id) }));
 
-  return NextResponse.json(withTokens);
+  const paginate = rawPage !== null || rawLimit !== null;
+  const limit = Math.min(Math.max(parseInt(rawLimit ?? "50", 10) || 50, 1), 200);
+  const page  = Math.max(parseInt(rawPage  ?? "1",  10) || 1, 1);
+
+  if (paginate) {
+    const [links, total] = await Promise.all([
+      db.link.findMany({ orderBy, include, skip: (page - 1) * limit, take: limit }),
+      db.link.count(),
+    ]);
+    return NextResponse.json(addTokens(links), { headers: { "X-Total-Count": String(total) } });
+  }
+
+  const links = await db.link.findMany({ orderBy, include });
+  return NextResponse.json(addTokens(links));
 }
 
 export async function POST(req: Request) {

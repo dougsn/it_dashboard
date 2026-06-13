@@ -42,6 +42,13 @@ export function resolveRouterosCredentials(device: {
   return { user, pass };
 }
 
+export function resolveSnmpCommunity(device: {
+  snmpCommunity:    string;
+  snmpCommunityEnc: string | null;
+}): string {
+  return device.snmpCommunityEnc ? decrypt(device.snmpCommunityEnc) : device.snmpCommunity;
+}
+
 export function resolveUnifiApiKey(device: {
   unifiApiKeyEnc: string | null;
 }): string | null {

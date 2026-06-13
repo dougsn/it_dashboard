@@ -50,6 +50,8 @@ export const deviceConfigSchema = z.object({
   omadaTlsVerify:       z.boolean().default(true),
   omadaControllerIp:    ipSchema.optional().nullable(),
   checkInterval: z.number().int().min(10).max(3600).default(60),
+  alertWebhookUrl: z.string().url("URL inválida").optional().nullable(),
+  alertThreshold:  z.number().int().min(1).max(100).default(3),
 });
 
 export const bulkDeviceSchema = deviceConfigSchema.omit({ ip: true }).extend({

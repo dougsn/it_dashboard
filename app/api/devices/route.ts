@@ -16,7 +16,9 @@ export async function GET(req: NextRequest) {
   const unauth = await requireAuth();
   if (unauth) return unauth;
   const { searchParams } = new URL(req.url);
-  const rawType = searchParams.get("type");
+  const rawType  = searchParams.get("type");
+  const rawPage  = searchParams.get("page");
+  const rawLimit = searchParams.get("limit");
 
   if (rawType !== null) {
     const parsed = deviceTypeSchema.safeParse(rawType);
@@ -25,12 +27,24 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const where = rawType ? { type: rawType as "MIKROTIK" | "DVR" | "CAMERA" | "OTHER" } : undefined;
+  const paginate = rawPage !== null || rawLimit !== null;
+  const limit = Math.min(Math.max(parseInt(rawLimit ?? "50", 10) || 50, 1), 200);
+  const page  = Math.max(parseInt(rawPage  ?? "1",  10) || 1, 1);
+
+  if (paginate) {
+    const [devices, total] = await Promise.all([
+      db.device.findMany({ where, include: { currentStatus: true }, orderBy: { name: "asc" }, skip: (page - 1) * limit, take: limit }),
+      db.device.count({ where }),
+    ]);
+    return NextResponse.json(devices.map(sanitizeDevice), { headers: { "X-Total-Count": String(total) } });
+  }
+
   const devices = await db.device.findMany({
-    where: rawType ? { type: rawType as "MIKROTIK" | "DVR" | "CAMERA" | "OTHER" } : undefined,
+    where,
     include: { currentStatus: true },
     orderBy: { name: "asc" },
   });
-
   return NextResponse.json(devices.map(sanitizeDevice));
 }
 
@@ -40,11 +54,12 @@ export async function POST(req: NextRequest) {
   const body = await parseAndValidate(req, deviceConfigSchema);
   if (!body.ok) return body.response;
 
-  const { routerosUser, routerosPass, unifiApiKey, unifiUser, unifiPass, omadaClientId, omadaClientSecret, ...rest } = body.data;
+  const { routerosUser, routerosPass, unifiApiKey, unifiUser, unifiPass, omadaClientId, omadaClientSecret, snmpCommunity, ...rest } = body.data;
 
   const device = await db.device.create({
     data: {
       ...rest,
+      snmpCommunityEnc:    snmpCommunity    ? encrypt(snmpCommunity)    : null,
       routerosUserEnc:     routerosUser     ? encrypt(routerosUser)     : null,
       routerosPassEnc:     routerosPass     ? encrypt(routerosPass)     : null,
       unifiApiKeyEnc:      unifiApiKey      ? encrypt(unifiApiKey)      : null,

@@ -14,6 +14,7 @@ jest.mock("@/lib/db", () => ({
       create:     jest.fn(),
       update:     jest.fn(),
       delete:     jest.fn(),
+      count:      jest.fn(),
     },
   },
 }));
@@ -57,10 +58,12 @@ beforeEach(() => {
 
 // ─── GET /api/links ────────────────────────────────────────────────────────────
 
+const listLinksReq = () => makeReq("http://localhost/api/links");
+
 describe("GET /api/links", () => {
   it("returns 401 when not authenticated", async () => {
     mockAuth.mockResolvedValue(null as never);
-    const res = await listLinks();
+    const res = await listLinks(listLinksReq());
     expect(res.status).toBe(401);
   });
 
@@ -69,7 +72,7 @@ describe("GET /api/links", () => {
       { ...fakeLink, _count: { events: 3 } },
     ]);
 
-    const res = await listLinks();
+    const res = await listLinks(listLinksReq());
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toHaveLength(1);
@@ -79,7 +82,7 @@ describe("GET /api/links", () => {
 
   it("returns empty array when no links exist", async () => {
     (mockDb.link.findMany as jest.Mock).mockResolvedValue([]);
-    const res = await listLinks();
+    const res = await listLinks(listLinksReq());
     expect(await res.json()).toHaveLength(0);
   });
 });

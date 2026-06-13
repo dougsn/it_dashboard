@@ -28,9 +28,10 @@ model Device {
   httpEnabled     Boolean @default(false)
   httpPort        Int?
   httpPath        String  @default("/")
-  snmpEnabled     Boolean @default(false)
-  snmpCommunity   String  @default("public")
-  snmpPort        Int     @default(161)
+  snmpEnabled       Boolean @default(false)
+  snmpCommunity     String  @default("public") // plaintext fallback for existing records
+  snmpCommunityEnc  String? // AES-256-GCM encrypted
+  snmpPort          Int     @default(161)
   routerosEnabled Boolean @default(false)
   routerosUserEnc String? // AES-256-GCM encrypted
   routerosPassEnc String? // AES-256-GCM encrypted
@@ -56,6 +57,11 @@ model Device {
   omadaControllerIp    String? // IP do Omada Controller
 
   checkInterval Int @default(60)
+
+  // Alert notifications
+  alertWebhookUrl String?
+  alertThreshold  Int      @default(3) // consecutive failures before firing alert
+  lastAlertAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

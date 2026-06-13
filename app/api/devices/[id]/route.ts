@@ -39,9 +39,10 @@ export async function PUT(
   const body = await parseAndValidate(req, updateSchema);
   if (!body.ok) return body.response;
 
-  const { routerosUser, routerosPass, unifiApiKey, unifiUser, unifiPass, omadaClientId, omadaClientSecret, ...rest } = body.data;
+  const { routerosUser, routerosPass, unifiApiKey, unifiUser, unifiPass, omadaClientId, omadaClientSecret, snmpCommunity, ...rest } = body.data;
 
   const credentialUpdate: {
+    snmpCommunityEnc?:    string | null;
     routerosUserEnc?:     string | null;
     routerosPassEnc?:     string | null;
     unifiApiKeyEnc?:      string | null;
@@ -50,6 +51,9 @@ export async function PUT(
     omadaClientIdEnc?:    string | null;
     omadaClientSecretEnc?: string | null;
   } = {};
+  if (snmpCommunity !== undefined) {
+    credentialUpdate.snmpCommunityEnc = snmpCommunity ? encrypt(snmpCommunity) : null;
+  }
   if (routerosUser !== undefined) {
     credentialUpdate.routerosUserEnc = routerosUser ? encrypt(routerosUser) : null;
   }
