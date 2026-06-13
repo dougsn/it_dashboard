@@ -324,7 +324,7 @@ export default function DevicesPage() {
 
           <div className="w-px bg-border mx-0.5 self-stretch" />
 
-          {(["ALL", "MIKROTIK", "UNIFI_AP", "DVR", "CAMERA", "OTHER"] as const).map((t) => (
+          {(["ALL", "MIKROTIK", "OMADA_AP", "UNIFI_AP", "DVR", "CAMERA", "OTHER"] as const).map((t) => (
             <FilterChip
               key={t}
               active={typeFilter === t}
