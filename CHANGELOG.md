@@ -9,6 +9,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [0.6.0] — 2026-06-13 — Bloco A/B: Documentação & Headers de Segurança
+
+### Adicionado
+- `Cross-Origin-Opener-Policy: same-origin` e `Cross-Origin-Resource-Policy: same-origin` em `next.config.ts`
+- `E2E_BASE_URL`, `E2E_USERNAME`, `E2E_PASSWORD` no `.env.example` (para testes Playwright)
+- OpenAPI atualizado com `GET /api/metrics` (formato Prometheus), paginação (`page`, `limit`, `X-Total-Count`) em `/api/devices`, `/api/links` e `/api/notes`, filtros `?severity=` e `?status=` em `/api/notes`
+- OpenAPI: campos `alertWebhookUrl`, `alertThreshold`, `lastAlertAt` no schema `Device` e `alertWebhookUrl`, `alertThreshold` no `DeviceInput`
+- OpenAPI: `routerosUser`/`routerosPass` marcados como `deprecated: true` no `DeviceInput`
+- OpenAPI: header `ETag` documentado em `GET /api/devices`
+- `CHANGELOG.md` com histórico completo em formato Keep a Changelog (v0.1.0–v0.6.0)
+
+---
+
 ## [0.5.0] — 2026-06-13 — Fase 4: Performance & Qualidade
 
 ### Adicionado

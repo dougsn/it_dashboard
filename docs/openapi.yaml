@@ -266,6 +266,24 @@ components:
           type: boolean
           default: true
           description: Se deve validar o certificado TLS do controller (desabilite para certificados autoassinados).
+        alertWebhookUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: URL para receber alertas quando o dispositivo atinge `alertThreshold` falhas consecutivas. Suporta Slack, Teams, Telegram e qualquer endpoint HTTP/HTTPS.
+          example: "https://hooks.slack.com/services/T00/B00/xxx"
+        alertThreshold:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 3
+          description: Número de falhas consecutivas necessárias para disparar o alerta. Cooldown de 1 hora entre disparos.
+        lastAlertAt:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
+          description: Timestamp do último alerta enviado (usado para controle de cooldown).
         checkInterval:
           type: integer
           description: Intervalo entre checagens em segundos (mínimo 10, máximo 3600).
@@ -923,9 +941,13 @@ components:
         routerosUser:
           type: string
           nullable: true
+          deprecated: true
+          description: Deprecated — use credenciais criptografadas. Campo aceito para compatibilidade mas nunca retornado pela API.
         routerosPass:
           type: string
           nullable: true
+          deprecated: true
+          description: Deprecated — use credenciais criptografadas. Campo aceito para compatibilidade mas nunca retornado pela API.
         routerosPort:
           type: integer
           default: 8728
@@ -934,6 +956,18 @@ components:
           minimum: 10
           maximum: 3600
           default: 60
+        alertWebhookUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: URL de webhook para receber alertas de falha (Slack, Teams, HTTP genérico). Disparado após `alertThreshold` falhas consecutivas com cooldown de 1 hora.
+          example: "https://hooks.slack.com/services/T00/B00/xxx"
+        alertThreshold:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 3
+          description: Número de falhas consecutivas para disparar o alerta.
 
     BulkDeviceInput:
       type: object
@@ -1162,6 +1196,38 @@ paths:
                 onlineChecks: 1425
                 uptimePct: 98.96
 
+  /api/metrics:
+    get:
+      tags: [Sistema]
+      summary: Métricas no formato Prometheus / OpenMetrics
+      description: |
+        Retorna métricas do sistema em formato texto compatível com Prometheus scrape.
+        **Este endpoint é público — não exige autenticação.**
+
+        Métricas expostas:
+        - `watchit_devices_total{status}` — contagem de devices por status (online/offline/unknown)
+        - `watchit_device_uptime_pct{id,name}` — uptime das últimas 24h por device (0–100)
+        - `watchit_device_ping_avg_ms{id,name}` — ping médio das últimas 24h por device
+        - `watchit_worker_heartbeat_age_seconds` — segundos desde o último heartbeat do worker
+        - `watchit_links_total{status}` — contagem de links por status (online/offline/unknown)
+      security: []
+      responses:
+        "200":
+          description: Métricas em formato texto OpenMetrics.
+          content:
+            text/plain; version=0.0.4; charset=utf-8:
+              schema:
+                type: string
+              example: |
+                # HELP watchit_devices_total Total devices by status
+                # TYPE watchit_devices_total gauge
+                watchit_devices_total{status="online"} 12
+                watchit_devices_total{status="offline"} 1
+                watchit_devices_total{status="unknown"} 0
+                # HELP watchit_worker_heartbeat_age_seconds Seconds since last worker heartbeat
+                # TYPE watchit_worker_heartbeat_age_seconds gauge
+                watchit_worker_heartbeat_age_seconds 42
+
   /api/overview:
     get:
       tags: [Sistema]
@@ -1260,6 +1326,12 @@ paths:
       description: |
         Retorna todos os dispositivos com o status mais recente (`currentStatus`) incluído.
         Use o parâmetro `type` para filtrar por tipo — útil ao popular dropdowns de Mikrotik em formulários de link.
+
+        **Paginação**: quando `page` ou `limit` são informados, a resposta inclui o header `X-Total-Count` com o total de registros.
+        Sem paginação, retorna todos os registros.
+
+        **Cache / ETag**: quando `type` não é usado, a resposta inclui um header `ETag` calculado via `COUNT + MAX(updatedAt)`.
+        O cliente pode enviar `If-None-Match` para receber `304 Not Modified` quando os dados não mudaram.
       parameters:
         - in: query
           name: type
@@ -1267,9 +1339,34 @@ paths:
             $ref: "#/components/schemas/DeviceType"
           description: Filtrar por tipo de dispositivo.
           example: MIKROTIK
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: "Número da página (base 1). Requer `limit`."
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: Registros por página. Ativa a paginação e o header `X-Total-Count`.
       responses:
         "200":
           description: Lista de dispositivos ordenada por nome.
+          headers:
+            ETag:
+              description: Fingerprint do conjunto de dados para cache condicional (presente quando `type` não é usado).
+              schema:
+                type: string
+              example: '"a1b2c3d4e5f6"'
+            X-Total-Count:
+              description: Total de registros (presente quando `page` ou `limit` são usados).
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -1462,10 +1559,35 @@ paths:
     get:
       tags: [Links]
       summary: Listar links WAN
-      description: Retorna todos os links ordenados por data de criação (mais recentes primeiro), incluindo contagem de eventos.
+      description: |
+        Retorna todos os links ordenados por data de criação (mais recentes primeiro), incluindo contagem de eventos.
+
+        **Paginação**: quando `page` ou `limit` são informados, a resposta inclui o header `X-Total-Count`.
+        Sem paginação, retorna todos os registros.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: "Número da página (base 1). Requer `limit`."
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: Registros por página. Ativa a paginação e o header `X-Total-Count`.
       responses:
         "200":
           description: Lista de links.
+          headers:
+            X-Total-Count:
+              description: Total de registros (presente quando `page` ou `limit` são usados).
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -2259,9 +2381,45 @@ paths:
       description: |
         Retorna todas as notas ordenadas por severidade (CRITICAL primeiro) e depois por data de criação.
         Inclui dados resumidos do dispositivo associado quando presente.
+
+        **Filtros**: `severity` e `status` podem ser combinados. Ambos são opcionais.
+        **Paginação**: quando `page` ou `limit` são informados, a resposta inclui o header `X-Total-Count`.
+      parameters:
+        - in: query
+          name: severity
+          schema:
+            $ref: "#/components/schemas/NoteSeverity"
+          description: Filtrar por nível de severidade.
+          example: CRITICAL
+        - in: query
+          name: status
+          schema:
+            $ref: "#/components/schemas/NoteStatus"
+          description: Filtrar por status da nota.
+          example: OPEN
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: "Número da página (base 1). Requer `limit`."
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: Registros por página. Ativa a paginação e o header `X-Total-Count`.
       responses:
         "200":
           description: Lista de notas.
+          headers:
+            X-Total-Count:
+              description: Total de registros (presente quando `page` ou `limit` são usados).
+              schema:
+                type: integer
           content:
             application/json:
               schema:
