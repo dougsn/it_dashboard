@@ -238,7 +238,7 @@ function APCard({ device }: { device: UnifiDevice }) {
                 </thead>
                 <tbody className="divide-y">
                   {data.ssids.map((s, i) => (
-                    <tr key={i} className="hover:bg-muted/10">
+                    <tr key={`${s.ssid}-${s.band}-${i}`} className="hover:bg-muted/10">
                       <td className="px-5 py-2 font-semibold">{s.ssid}</td>
                       <td className="px-4 py-2">
                         <Badge variant="secondary" className="text-[10px] font-mono">{s.band}</Badge>
