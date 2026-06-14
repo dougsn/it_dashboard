@@ -80,10 +80,13 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 - [ ] _Follow-up: `POST /api/devices/bulk` grava community SNMP em texto claro na coluna (criptografia-em-repouso
       não aplicada no bulk). Mover para o padrão `snmpCommunityEnc` como nos demais handlers._
 
-### Branch `fix/auth-hardening`
-- [ ] **Enumeração via `/api/auth/check-2fa`** — adicionar rate limit por IP; delay artificial p/ usuário inexistente.
-- [ ] **Rate limiter TOCTOU** — `auth/rate-check/route.ts` — `upsert` atômico com `increment`, sem `findUnique` prévio.
-- [ ] **Validação de env no Next.js** — criar `instrumentation.ts` chamando `validateKey()`/`validateSecret()` no startup.
+### Branch `fix/auth-hardening` ✅ CONCLUÍDA (SEC-030 aceito, SEC-032, SEC-037)
+- [x] **Enumeração via `/api/auth/check-2fa`** (SEC-030) — aceito por design: a feature exige revelar
+      `totpEnabled` antes do submit; vazamento de baixo valor (escopo interno). Documentado no handler e no relatório.
+- [x] **Rate limiter TOCTOU** (SEC-032) — `auth/rate-check`: `INSERT ... ON CONFLICT DO UPDATE` atômico
+      (`$queryRaw`) substitui o `findUnique`+`update`. Teste reescrito.
+- [x] **Validação de env no Next.js** (SEC-037) — `instrumentation.ts` chama `validateKey()`/`validateSecret()`
+      no `register()` — fail-fast no startup do servidor web.
 
 ### Branch `fix/data-fetching-races`
 - [ ] **Sem `AbortController` em nenhum poll** — resposta lenta sobrescreve dados frescos (drawer 1h→7d).

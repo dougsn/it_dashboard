@@ -25,27 +25,20 @@ export async function POST(req: NextRequest) {
   }
 
   const now = new Date();
-  const existing = await db.rateLimit.findUnique({ where: { ip } });
+  const windowEnd = new Date(now.getTime() + WINDOW_MS);
 
-  let count: number;
-
-  if (!existing || existing.resetAt <= now) {
-    // New IP or expired window — start fresh
-    const windowEnd = new Date(now.getTime() + WINDOW_MS);
-    await db.rateLimit.upsert({
-      where: { ip },
-      update: { count: 1, resetAt: windowEnd },
-      create: { ip, count: 1, resetAt: windowEnd },
-    });
-    count = 1;
-  } else {
-    // Active window — increment
-    const updated = await db.rateLimit.update({
-      where: { ip },
-      data: { count: { increment: 1 } },
-    });
-    count = updated.count;
-  }
+  // Atomic upsert-and-increment (avoids the read-then-write TOCTOU where two
+  // concurrent requests from the same IP both start the window at count=1).
+  // On conflict: reset to 1 if the previous window expired, otherwise increment.
+  const rows = await db.$queryRaw<{ count: number }[]>`
+    INSERT INTO "RateLimit" ("ip", "count", "resetAt")
+    VALUES (${ip}, 1, ${windowEnd})
+    ON CONFLICT ("ip") DO UPDATE SET
+      "count"   = CASE WHEN "RateLimit"."resetAt" <= ${now} THEN 1 ELSE "RateLimit"."count" + 1 END,
+      "resetAt" = CASE WHEN "RateLimit"."resetAt" <= ${now} THEN ${windowEnd} ELSE "RateLimit"."resetAt" END
+    RETURNING "count"
+  `;
+  const count = Number(rows[0].count);
 
   const allowed = count <= MAX_ATTEMPTS;
   const remaining = Math.max(0, MAX_ATTEMPTS - count);

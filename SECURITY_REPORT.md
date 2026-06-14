@@ -1,6 +1,6 @@
 # Relatório de Segurança — WatchIT Tower
 
-**Última atualização:** 2026-06-14 (v0.2.0 — SEC-028/029/031/033/036 resolvidos; SEC-021 completado com revalidação por troca de senha)  
+**Última atualização:** 2026-06-14 (v0.2.0 — SEC-028/029/031/032/033/036/037 resolvidos, SEC-030 aceito; SEC-021 completado)  
 **Versão do sistema:** 0.2.0  
 **Analista:** Análise automatizada via Claude Code  
 **Escopo:** Código-fonte completo — Next.js 14 (frontend/API), worker de monitoramento, banco PostgreSQL
@@ -15,10 +15,10 @@ O WatchIT Tower é uma aplicação interna para monitoramento de equipamentos de
 |-----------|-------|-----------|--------|
 | 🔴 Crítico  | 1     | 1         | 0      |
 | 🟠 Alto     | 4     | 4         | 0      |
-| 🟡 Médio    | 6     | 5         | 1      |
-| 🔵 Baixo    | 5     | 3         | 2      |
-| ℹ️ Info     | 16    | 12 + 4⚠️  | 0      |
-| **Total**  | **32**| **29**    | **3**  |
+| 🟡 Médio    | 7     | 5 + 1⚠️   | 1      |
+| 🔵 Baixo    | 6     | 4         | 2      |
+| ℹ️ Info     | 17    | 13 + 4⚠️  | 0      |
+| **Total**  | **35**| **32**    | **3**  |
 
 > ⚠️ = Aceito / won't-fix por design intencional ou limitação de framework
 
@@ -322,6 +322,33 @@ O handler de erro retornava `err.message` diretamente ao cliente, vazando estrut
 **Resolvido em:** branch `fix/credential-exposure`
 
 `extractIp()` confiava cegamente em `X-Forwarded-For`/`X-Real-IP`, permitindo que um cliente em acesso direto forjasse o IP registrado nos logs de auditoria. **Correção:** os headers só são honrados quando `TRUST_PROXY=true` (definido apenas atrás de um proxy reverso confiável que sanitiza os headers); caso contrário retorna `null`. Documentado em `.env.example`.
+
+---
+
+### SEC-030 — Enumeração de 2FA via /api/auth/check-2fa
+**Severidade:** 🟡 MÉDIO — ⚠️ ACEITO (won't-fix por design)
+**Categoria:** Exposição de informação (OWASP A05)
+**Avaliado em:** branch `fix/auth-hardening`
+
+O endpoint público revela se um username tem 2FA ativo antes da verificação de senha. É inerente à feature (o campo TOTP precisa ser renderizado antes do submit). **Decisão:** aceito para o escopo interno — o vazamento exige conhecer o username, a senha continua obrigatória, e usuários inexistentes/sem-2FA retornam o mesmo `false` (não é possível descobrir usernames válidos, apenas saber quais conhecidos têm 2FA). Documentado em comentário no handler.
+
+---
+
+### SEC-032 — Race condition (TOCTOU) no rate limiter de login
+**Severidade:** 🔵 BAIXO — ✅ RESOLVIDO
+**Categoria:** Quebra de controle de acesso (OWASP A07)
+**Resolvido em:** branch `fix/auth-hardening`
+
+`POST /api/auth/rate-check` fazia `findUnique` seguido de `update`/`upsert` separados; duas requisições simultâneas do mesmo IP podiam ambas iniciar a janela em `count=1`, permitindo exceder o limite de 10 tentativas. **Correção:** substituído por um `INSERT ... ON CONFLICT DO UPDATE` atômico (`$queryRaw`) que reseta ou incrementa em uma única operação. Coberto por `__tests__/api/auth-rate-check.test.ts`.
+
+---
+
+### SEC-037 — Validação de secrets no startup do servidor web
+**Severidade:** ℹ️ INFO — ✅ RESOLVIDO
+**Categoria:** Configuração segura (OWASP A05)
+**Resolvido em:** branch `fix/auth-hardening`
+
+`validateKey()`/`validateSecret()` rodavam apenas no worker. Se o processo Next.js iniciasse sem `ENCRYPTION_KEY`/`WEBHOOK_SECRET`, a falha só aparecia na primeira request que criptografava (500 críptico). **Correção:** `instrumentation.ts` chama ambas no `register()` do Next.js, garantindo fail-fast no startup do servidor web — mesma garantia que o worker já tinha.
 
 ---
 
