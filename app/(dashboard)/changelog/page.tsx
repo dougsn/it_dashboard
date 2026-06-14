@@ -35,6 +35,7 @@ const RELEASES: Release[] = [
       { type: "fix", text: "Cadastro valida formato de IP; filtros de data inválidos retornam erro claro; formulários impedem envio duplicado" },
       { type: "perf", text: "Índices de banco em tipo de dispositivo, links Mikrotik e auditoria por IP; exportações e listas de eventos com limite de memória" },
       { type: "perf", text: "Detecção de incidentes, timeline e relatórios processados no banco (transições e agregações) — escalam para janelas longas e frotas grandes sem carregar todo o histórico na memória" },
+      { type: "perf", text: "Índice por data no histórico de status e eventos de link — painel, saúde do sistema e limpeza deixam de varrer a tabela inteira (consultas por período ~centenas de vezes mais rápidas em bases grandes)" },
       { type: "fix", text: "Acessibilidade: cards e linhas clicáveis navegáveis por teclado, estados ARIA (pressed/expanded/sort) em filtros, seções e tabelas, e rótulo no botão Voltar" },
       { type: "fix", text: "Busca de dispositivos por IP encontra trechos no meio do endereço (ex: '168.1'), não apenas o início" },
       { type: "feat", text: "Badges da sidebar (dispositivos offline, links online) atualizam ao vivo a cada 30s, sem precisar recarregar a página" },
