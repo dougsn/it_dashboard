@@ -53,12 +53,18 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 - [x] **`take` seguro onde não muda semântica** — `devices/[id]/export` (cap 100k linhas) e
       `links/[id]/events` (2000 eventos mais recentes, reordenados asc).
 
-### Branch `perf/incident-detection-sql` (separada — refactor arriscado)
-- [ ] **Histórico ilimitado em memória** — `incidents/route.ts`, `timeline/route.ts`, `lib/report-builder.ts`
-      compartilham o algoritmo `buildIncidents` que exige histórico ordenado completo (detecção de transições
-      via `LAG`). Reescrever com query SQL de window function (`$queryRaw`) retornando só transições, e
-      reescrever os testes dos três. Queries já são indexadas por `[deviceId, timestamp]` — é memória, não scan.
-      Separado de `perf/bounded-queries` por exigir refactor cross-cutting + reescrita de testes.
+### Branch `perf/incident-detection-sql` ✅ CONCLUÍDA (incidents) — timeline/report-builder ver follow-ups
+- [x] **`incidents/route.ts` (achado ALTA, janela até 30d)** — novo `lib/incident-detection.ts` com query SQL
+      `LAG` (`getOnlineTransitions`) que retorna só transições + bordas, e `detectIncidents` puro. Provadamente
+      idêntico ao algoritmo anterior (transições + bordas; linhas redundantes são no-op). Teste de rota reescrito
+      (mocka `$queryRaw`) + **teste de integração** validando o SQL real contra PostgreSQL.
+- [ ] _Follow-up: `timeline/route.ts` — além de online/offline, emite eventos de alta latência com lógica
+      stateful quirky (emite no 2º registro alto consecutivo por causa da init de `wasHighLatency`). A redução
+      de transições NÃO preserva esse caso de borda; converter exigiria replicar/ajustar a lógica. Janela
+      default 24h (menor) — risco/benefício baixo._
+- [ ] _Follow-up: `lib/report-builder.ts` — o gargalo de memória é a busca de amostras para os gráficos
+      (downsample 400 pts carrega tudo antes), não a detecção de incidentes. Converter só incidents não reduz
+      memória; precisa de downsample/agregação no SQL (muda aparência do gráfico — decidir abordagem)._
 
 ---
 
