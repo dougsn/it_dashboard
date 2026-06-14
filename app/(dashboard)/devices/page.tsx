@@ -247,18 +247,23 @@ export default function DevicesPage() {
   }
 
   const load = useCallback(async () => {
-    const [devRes, ovRes] = await Promise.all([
-      fetch("/api/devices"),
-      fetch("/api/overview"),
-    ]);
-    if (devRes.ok) {
-      const data = await devRes.json();
-      setDevices(data);
-      notify(data);
+    try {
+      const [devRes, ovRes] = await Promise.all([
+        fetch("/api/devices"),
+        fetch("/api/overview"),
+      ]);
+      if (devRes.ok) {
+        const data = await devRes.json();
+        setDevices(data);
+        notify(data);
+      }
+      if (ovRes.ok) setOverviewData(await ovRes.json());
+      if (devRes.ok || ovRes.ok) setLastUpdated(new Date());
+    } catch (err) {
+      console.error("[devices] falha ao carregar dados:", err);
+    } finally {
+      setLoading(false);
     }
-    if (ovRes.ok) setOverviewData(await ovRes.json());
-    setLastUpdated(new Date());
-    setLoading(false);
   }, [notify]);
 
   usePolling(load, 30_000);

@@ -344,9 +344,14 @@ export default function UnifiPage() {
   const [isChecking, setIsChecking] = useState(false);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/devices?type=UNIFI_AP");
-    if (res.ok) setDevices(await res.json());
-    setLoading(false);
+    try {
+      const res = await fetch("/api/devices?type=UNIFI_AP");
+      if (res.ok) setDevices(await res.json());
+    } catch (err) {
+      console.error("[unifi] falha ao carregar dispositivos:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   async function handleCheckAll() {

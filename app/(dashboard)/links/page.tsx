@@ -247,9 +247,10 @@ export default function LinksPage() {
   async function confirmDelete() {
     if (!confirmDeleteId) return;
     try {
-      await fetch(`/api/links/${confirmDeleteId}`, { method: "DELETE" });
+      const res = await fetch(`/api/links/${confirmDeleteId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       toast.success("Link excluído");
-      fetchLinks();
+      await fetchLinks();
     } catch {
       toast.error("Erro ao excluir");
     } finally {

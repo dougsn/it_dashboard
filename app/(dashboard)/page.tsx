@@ -384,22 +384,27 @@ export default function OverviewPage() {
   const [drawerLinkId, setDrawerLinkId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [devRes, linkRes, healthRes, incRes, ovRes, tlRes] = await Promise.all([
-      fetch("/api/devices"),
-      fetch("/api/links"),
-      fetch("/api/health"),
-      fetch("/api/incidents?hours=168"),
-      fetch("/api/overview"),
-      fetch("/api/timeline?hours=24"),
-    ]);
-    if (devRes.ok) setDevices(await devRes.json());
-    if (linkRes.ok) setLinks(await linkRes.json());
-    if (healthRes.ok) setHealth(await healthRes.json());
-    if (incRes.ok) { const inc = await incRes.json(); setIncidents(inc.data ?? inc); }
-    if (ovRes.ok) setOverviewData(await ovRes.json());
-    if (tlRes.ok) setTimeline(await tlRes.json());
-    setLastUpdated(new Date());
-    setLoading(false);
+    try {
+      const [devRes, linkRes, healthRes, incRes, ovRes, tlRes] = await Promise.all([
+        fetch("/api/devices"),
+        fetch("/api/links"),
+        fetch("/api/health"),
+        fetch("/api/incidents?hours=168"),
+        fetch("/api/overview"),
+        fetch("/api/timeline?hours=24"),
+      ]);
+      if (devRes.ok) setDevices(await devRes.json());
+      if (linkRes.ok) setLinks(await linkRes.json());
+      if (healthRes.ok) setHealth(await healthRes.json());
+      if (incRes.ok) { const inc = await incRes.json(); setIncidents(inc.data ?? inc); }
+      if (ovRes.ok) setOverviewData(await ovRes.json());
+      if (tlRes.ok) setTimeline(await tlRes.json());
+      setLastUpdated(new Date());
+    } catch (err) {
+      console.error("[overview] falha ao carregar dados:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   usePolling(load, 30_000);

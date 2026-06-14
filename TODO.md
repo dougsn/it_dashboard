@@ -40,12 +40,12 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
       `lastAlertAt` (cooldown); só envia se `count === 1`.
       _Nota: teste do caminho de alerta (interno a safeRun) movido para `test/coverage-gaps`._
 
-### Branch `fix/frontend-error-handling`
-- [ ] ✓ **Sem error boundaries** — criar `app/error.tsx` e `app/(dashboard)/error.tsx`
-      (risco concreto: `DEVICE_TYPE_ICON[type]` não mapeado derruba a Visão Geral inteira).
-- [ ] **Loading trava no erro de fetch** — `page.tsx:386`, `devices/page.tsx:249`, `incidents/page.tsx:56`,
-      `unifi/page.tsx`, `devices/[id]/page.tsx` — envolver em `try/catch/finally`, estado de erro + retry.
-- [ ] **`fetch` sem checar `res.ok`** — `links/page.tsx:247` (DELETE falho mostra "sucesso") e similares.
+### Branch `fix/frontend-error-handling` ✅ CONCLUÍDA
+- [x] ✓ **Sem error boundaries** — criados `app/(dashboard)/error.tsx` (nível de segmento, mantém sidebar)
+      e `app/global-error.tsx` (rede de segurança do layout raiz), ambos com botão "Tentar novamente".
+- [x] **Loading trava no erro de fetch** — `try/catch/finally` em `page.tsx`, `devices/page.tsx`,
+      `incidents/page.tsx` (+ `res.ok` check e toast), `unifi/page.tsx`, `omada/page.tsx`, `devices/[id]/page.tsx`.
+- [x] **`fetch` sem checar `res.ok`** — `links/page.tsx` confirmDelete agora valida `res.ok` antes do toast de sucesso.
 
 ### Branch `perf/bounded-queries`
 - [ ] **Histórico ilimitado em memória** — `incidents/route.ts`, `timeline/route.ts`,

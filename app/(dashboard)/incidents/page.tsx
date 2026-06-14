@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/empty-state";
 import { DEVICE_TYPE_ICON } from "@/lib/device-constants";
 import { formatDuration, timeAgo, fmtTime, fmtDate } from "@/lib/format";
 import { FilterChip } from "@/components/filter-chip";
+import { toast } from "sonner";
 import type { DeviceType } from "@prisma/client";
 import type { Incident, PaginatedIncidentsResponse } from "@/app/api/incidents/route";
 
@@ -53,22 +54,25 @@ export default function IncidentsPage() {
   const [statusFilter, setStatusFilter] = useState<"ALL" | "OPEN" | "RESOLVED">("ALL");
   const [drawerDeviceId, setDrawerDeviceId] = useState<string | null>(null);
 
-  const fetchPage = (hours: number, p: number, replace: boolean) => {
+  const fetchPage = async (hours: number, p: number, replace: boolean) => {
     if (replace) setLoading(true);
     else setLoadingMore(true);
 
-    fetch(`/api/incidents?hours=${hours}&page=${p}&limit=${PAGE_LIMIT}`)
-      .then((r) => r.json())
-      .then((data: PaginatedIncidentsResponse) => {
-        setIncidents((prev) => replace ? (data.data ?? []) : [...prev, ...(data.data ?? [])]);
-        setTotal(data.total ?? 0);
-        setHasMore(data.hasMore ?? false);
-        setPage(p);
-      })
-      .finally(() => {
-        setLoading(false);
-        setLoadingMore(false);
-      });
+    try {
+      const r = await fetch(`/api/incidents?hours=${hours}&page=${p}&limit=${PAGE_LIMIT}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data: PaginatedIncidentsResponse = await r.json();
+      setIncidents((prev) => replace ? (data.data ?? []) : [...prev, ...(data.data ?? [])]);
+      setTotal(data.total ?? 0);
+      setHasMore(data.hasMore ?? false);
+      setPage(p);
+    } catch (err) {
+      console.error("[incidents] falha ao carregar página:", err);
+      toast.error("Erro ao carregar incidentes");
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
   };
 
   useEffect(() => {

@@ -155,13 +155,18 @@ export default function DeviceDetailPage({
   const [historyExpanded, setHistoryExpanded] = useState(false);
 
   const load = useCallback(async (h: number) => {
-    const [devRes, histRes] = await Promise.all([
-      fetch(`/api/devices/${id}`, { cache: "no-store" }),
-      fetch(`/api/status/${id}?hours=${h}`, { cache: "no-store" }),
-    ]);
-    if (devRes.ok) setDevice(await devRes.json());
-    if (histRes.ok) setHistory(await histRes.json());
-    setLoading(false);
+    try {
+      const [devRes, histRes] = await Promise.all([
+        fetch(`/api/devices/${id}`, { cache: "no-store" }),
+        fetch(`/api/status/${id}?hours=${h}`, { cache: "no-store" }),
+      ]);
+      if (devRes.ok) setDevice(await devRes.json());
+      if (histRes.ok) setHistory(await histRes.json());
+    } catch (err) {
+      console.error("[device-detail] falha ao carregar dados:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
   useEffect(() => {

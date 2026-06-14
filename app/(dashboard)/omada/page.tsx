@@ -336,9 +336,14 @@ export default function OmadaPage() {
   const [isChecking, setIsChecking] = useState(false);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/devices?type=OMADA_AP");
-    if (res.ok) setDevices(await res.json());
-    setLoading(false);
+    try {
+      const res = await fetch("/api/devices?type=OMADA_AP");
+      if (res.ok) setDevices(await res.json());
+    } catch (err) {
+      console.error("[omada] falha ao carregar dispositivos:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   async function handleCheckAll() {
