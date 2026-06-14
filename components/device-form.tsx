@@ -90,7 +90,7 @@ export function DeviceForm({ device }: DeviceFormProps) {
           httpPort: device.httpPort ?? undefined,
           httpPath: device.httpPath,
           snmpEnabled: device.snmpEnabled,
-          snmpCommunity: device.snmpCommunity,
+          snmpCommunity: "", // write-only: API never returns it; blank = manter atual
           snmpPort: device.snmpPort,
           routerosEnabled: device.routerosEnabled,
           routerosUser: "",
@@ -180,6 +180,8 @@ export function DeviceForm({ device }: DeviceFormProps) {
             ? data.unifiControllerIp
             : null,
         omadaControllerIp: data.omadaControllerIp || null,
+        // Write-only: omit when blank on edit so the API keeps the stored community
+        snmpCommunity: data.snmpCommunity || undefined,
         // Clear unused auth fields so the API can null them in DB
         unifiApiKey: data.unifiAuthMethod === "apikey" ? (data.unifiApiKey || undefined) : "",
         unifiUser:   data.unifiAuthMethod === "userpass" ? (data.unifiUser || undefined) : "",

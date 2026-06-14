@@ -87,9 +87,11 @@ export async function GET() {
 
     return NextResponse.json(payload);
   } catch (err) {
+    // Log the real error server-side; return a generic message so internal DB
+    // structure (table names, connection details) never leaks to the client.
     console.error("[admin/stats] erro:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: "Erro interno ao consultar estatísticas do banco" },
       { status: 500 }
     );
   }
