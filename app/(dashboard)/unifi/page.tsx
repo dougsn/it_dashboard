@@ -65,6 +65,20 @@ interface UnifiDevice {
 
 type ClientSortKey = "name" | "signal" | "connectedAt";
 
+// Module scope (not redefined on every render)
+function SortBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1 hover:text-foreground transition-colors ${
+        active ? "text-foreground font-semibold" : "text-muted-foreground"
+      }`}
+    >
+      {label}<ArrowUpDown className="h-3 w-3" aria-hidden="true" />
+    </button>
+  );
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function SignalCell({ signal }: { signal: number | null }) {
@@ -106,19 +120,6 @@ function APCard({ device }: { device: UnifiDevice }) {
     if (sortKey === "connectedAt") return new Date(b.connectedAt ?? 0).getTime() - new Date(a.connectedAt ?? 0).getTime();
     return (b.signal ?? -200) - (a.signal ?? -200);
   });
-
-  function SortBtn({ col, label }: { col: ClientSortKey; label: string }) {
-    return (
-      <button
-        onClick={() => setSortKey(col)}
-        className={`flex items-center gap-1 hover:text-foreground transition-colors ${
-          sortKey === col ? "text-foreground font-semibold" : "text-muted-foreground"
-        }`}
-      >
-        {label}<ArrowUpDown className="h-3 w-3" aria-hidden="true" />
-      </button>
-    );
-  }
 
   return (
     <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
@@ -278,11 +279,11 @@ function APCard({ device }: { device: UnifiDevice }) {
               <table className="w-full text-xs" aria-label="Clientes UniFi conectados">
                 <thead className="bg-muted/40">
                   <tr>
-                    <th className="px-5 py-2.5 text-left"><SortBtn col="name" label="Nome / MAC" /></th>
+                    <th className="px-5 py-2.5 text-left"><SortBtn label="Nome / MAC" active={sortKey === "name"} onClick={() => setSortKey("name")} /></th>
                     <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">IP</th>
-                    {isInformApi && <th className="px-4 py-2.5 text-left"><SortBtn col="signal" label="Sinal" /></th>}
+                    {isInformApi && <th className="px-4 py-2.5 text-left"><SortBtn label="Sinal" active={sortKey === "signal"} onClick={() => setSortKey("signal")} /></th>}
                     {isInformApi && <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">SSID</th>}
-                    {isInformApi && <th className="px-4 py-2.5 text-left"><SortBtn col="connectedAt" label="Conectado em" /></th>}
+                    {isInformApi && <th className="px-4 py-2.5 text-left"><SortBtn label="Conectado em" active={sortKey === "connectedAt"} onClick={() => setSortKey("connectedAt")} /></th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y">

@@ -126,8 +126,8 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 - [x] **`formatBytes`/`formatBps` duplicados** — `formatBytes` consolidado em `lib/format.ts`; removidas as
       3 cópias locais (devices/[id], unifi, system). `formatBps` local de devices/[id] também removido. +2 testes.
 - [x] **`MetricTile`/`InfoRow` duplicados** — extraídos para `components/drawer-primitives.tsx` (versão superset).
-- [ ] _Follow-up (cosmético): `SortButton`/`SortBtn` dentro do render → escopo de módulo (exige props nos call sites;
-      ganho de perf mínimo em botões triviais)._
+- [x] _Follow-up (cosmético): `SortButton` (devices/[id]) e `SortBtn` (unifi) movidos para escopo de módulo
+      com props `active`/`onClick` — não são mais recriados a cada render. ✅_
 - [ ] _Follow-up (risco em form): `handleTestUnifi`/`handleTestOmada` (device-form-protocols vs bulk) → hook
       compartilhado. Adiado por tocar lógica de formulário em dois lugares._
 

@@ -121,6 +121,21 @@ type HourOption = typeof HOUR_OPTIONS[number]["value"];
 
 type ClientSortKey = "name" | "ip" | "connectedAt" | "signal" | "band" | "uptime";
 
+// Module scope (not redefined on every render — avoids remount of the header buttons)
+function SortButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1 hover:text-foreground transition-colors ${
+        active ? "text-foreground font-semibold" : "text-muted-foreground"
+      }`}
+    >
+      {label}
+      <ArrowUpDown className="h-3 w-3" aria-hidden="true" />
+    </button>
+  );
+}
+
 export default function DeviceDetailPage({
   params,
 }: {
@@ -227,19 +242,6 @@ export default function DeviceDetailPage({
   const reversedHistory = [...history].reverse();
   const historyVisible = historyExpanded ? reversedHistory : reversedHistory.slice(0, 20);
 
-  function SortButton({ col, label }: { col: ClientSortKey; label: string }) {
-    return (
-      <button
-        onClick={() => setClientSort(col)}
-        className={`flex items-center gap-1 hover:text-foreground transition-colors ${
-          clientSort === col ? "text-foreground font-semibold" : "text-muted-foreground"
-        }`}
-      >
-        {label}
-        <ArrowUpDown className="h-3 w-3" aria-hidden="true" />
-      </button>
-    );
-  }
 
   return (
     <>
@@ -570,14 +572,14 @@ export default function DeviceDetailPage({
                   <thead className="bg-muted/40 border-b">
                     <tr>
                       <th className="px-4 py-2.5 text-left">
-                        <SortButton col="name" label="Nome / MAC" />
+                        <SortButton label="Nome / MAC" active={clientSort === "name"} onClick={() => setClientSort("name")} />
                       </th>
                       <th className="px-4 py-2.5 text-left">
-                        <SortButton col="ip" label="IP" />
+                        <SortButton label="IP" active={clientSort === "ip"} onClick={() => setClientSort("ip")} />
                       </th>
                       {(isInformApi || omadaData) && (
                         <th className="px-4 py-2.5 text-left">
-                          <SortButton col="signal" label="Sinal" />
+                          <SortButton label="Sinal" active={clientSort === "signal"} onClick={() => setClientSort("signal")} />
                         </th>
                       )}
                       {(isInformApi || omadaData) && (
@@ -585,7 +587,7 @@ export default function DeviceDetailPage({
                       )}
                       {omadaData && (
                         <th className="px-4 py-2.5 text-left">
-                          <SortButton col="band" label="Banda" />
+                          <SortButton label="Banda" active={clientSort === "band"} onClick={() => setClientSort("band")} />
                         </th>
                       )}
                       {omadaData && (
@@ -593,12 +595,12 @@ export default function DeviceDetailPage({
                       )}
                       {omadaData && (
                         <th className="px-4 py-2.5 text-left">
-                          <SortButton col="uptime" label="Conectado há" />
+                          <SortButton label="Conectado há" active={clientSort === "uptime"} onClick={() => setClientSort("uptime")} />
                         </th>
                       )}
                       {isInformApi && (
                         <th className="px-4 py-2.5 text-left">
-                          <SortButton col="connectedAt" label="Conectado em" />
+                          <SortButton label="Conectado em" active={clientSort === "connectedAt"} onClick={() => setClientSort("connectedAt")} />
                         </th>
                       )}
                     </tr>
