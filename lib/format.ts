@@ -28,6 +28,14 @@ export function formatBps(bps: number | null | undefined): string {
   return `${bps} bps`;
 }
 
+export function formatBytes(bytes: number | null | undefined): string {
+  if (bytes == null || bytes === 0) return "—";
+  if (bytes < 1_024)         return `${bytes} B`;
+  if (bytes < 1_048_576)     return `${(bytes / 1_024).toFixed(1)} KB`;
+  if (bytes < 1_073_741_824) return `${(bytes / 1_048_576).toFixed(1)} MB`;
+  return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
+}
+
 export function formatDuration(ms: number | null | undefined): string {
   if (ms == null) return "—";
   const s = Math.floor(ms / 1000);

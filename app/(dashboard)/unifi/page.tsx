@@ -6,7 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Topbar } from "@/components/topbar";
 import { StatusBadge } from "@/components/status-badge";
-import { formatUptime, formatBps, timeAgo, fmtDateTime } from "@/lib/format";
+import { formatUptime, formatBps, formatBytes, timeAgo, fmtDateTime } from "@/lib/format";
 import {
   Wifi, Users, Cpu, MemoryStick, Clock, ArrowDownToLine, ArrowUpFromLine,
   ChevronDown, ChevronUp, AlertTriangle, Radio, ExternalLink, ArrowUpDown, RefreshCw,
@@ -80,13 +80,6 @@ function MetricPill({ icon: Icon, value, color }: { icon: React.ElementType; val
       {value}
     </span>
   );
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "—";
-  if (bytes < 1_048_576)     return `${(bytes / 1_024).toFixed(1)} KB`;
-  if (bytes < 1_073_741_824) return `${(bytes / 1_048_576).toFixed(1)} MB`;
-  return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
 }
 
 // ── AP Card ────────────────────────────────────────────────────────────────────

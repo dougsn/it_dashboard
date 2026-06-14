@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { StatusBadge } from "@/components/status-badge";
 import { MetricsChart } from "@/components/metrics-chart";
 import { PingChart } from "@/components/ping-chart";
-import { formatUptime, formatResponseTime, formatPercent, fmtDateTime } from "@/lib/format";
+import { formatUptime, formatResponseTime, formatPercent, fmtDateTime, formatBps, formatBytes } from "@/lib/format";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -120,22 +120,6 @@ const HOUR_OPTIONS = [
 type HourOption = typeof HOUR_OPTIONS[number]["value"];
 
 type ClientSortKey = "name" | "ip" | "connectedAt" | "signal" | "band" | "uptime";
-
-function formatBps(bps: number | null): string {
-  if (bps == null) return "—";
-  if (bps < 1_000) return `${bps} bps`;
-  if (bps < 1_000_000) return `${(bps / 1_000).toFixed(1)} Kbps`;
-  if (bps < 1_000_000_000) return `${(bps / 1_000_000).toFixed(1)} Mbps`;
-  return `${(bps / 1_000_000_000).toFixed(2)} Gbps`;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "—";
-  if (bytes < 1_024) return `${bytes} B`;
-  if (bytes < 1_048_576) return `${(bytes / 1_024).toFixed(1)} KB`;
-  if (bytes < 1_073_741_824) return `${(bytes / 1_048_576).toFixed(1)} MB`;
-  return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
-}
 
 export default function DeviceDetailPage({
   params,

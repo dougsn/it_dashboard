@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { fmtDateTime } from "@/lib/format";
+import { fmtDateTime, formatBytes } from "@/lib/format";
 import {
   Database,
   Server,
@@ -94,13 +94,6 @@ const TABLE_LABELS: Record<string, string> = {
   WorkerHeartbeat: "Worker heartbeat",
   SystemConfig: "Configuração",
 };
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
-}
 
 export function SystemClient() {
   const [stats, setStats] = useState<Stats | null>(null);

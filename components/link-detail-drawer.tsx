@@ -6,6 +6,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Wifi, MapPin, History, Zap, X, AlertTriangle, ArrowDown, ArrowUp } from "lucide-react";
 import { formatBps, formatDuration, fmtDateTime, fmtDate } from "@/lib/format";
+import { MetricTile, InfoRow } from "@/components/drawer-primitives";
 
 type SegState = "online" | "offline" | "degraded" | "empty";
 
@@ -74,27 +75,6 @@ function calcOutages(events: LinkEvent[]) {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function MetricTile({ label, value, loading }: { label: string; value: string | null; loading?: boolean }) {
-  return (
-    <div className="rounded-xl border border-border bg-muted/30 p-3.5">
-      <p className="text-[9.5px] font-bold uppercase tracking-widest text-muted-foreground mb-2">{label}</p>
-      {loading ? <Skeleton className="h-7 w-20" /> : (
-        <p className="text-[1.6rem] font-extrabold leading-none tabular-nums text-foreground">
-          {value ?? "—"}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between py-2.5 border-b border-border/60 last:border-0">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-semibold text-right">{value}</span>
-    </div>
-  );
-}
 
 // ─── Drawer ───────────────────────────────────────────────────────────────────
 

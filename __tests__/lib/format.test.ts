@@ -3,6 +3,7 @@ import {
   formatResponseTime,
   formatPercent,
   formatBps,
+  formatBytes,
   formatDuration,
   timeAgo,
 } from "@/lib/format";
@@ -94,6 +95,21 @@ describe("formatBps", () => {
   it("formats gbps range", () => {
     expect(formatBps(1_000_000_000)).toBe("1.0 Gbps");
     expect(formatBps(10_000_000_000)).toBe("10.0 Gbps");
+  });
+});
+
+describe("formatBytes", () => {
+  it("returns '—' for null, undefined and zero", () => {
+    expect(formatBytes(null)).toBe("—");
+    expect(formatBytes(undefined)).toBe("—");
+    expect(formatBytes(0)).toBe("—");
+  });
+
+  it("formats bytes, KB, MB and GB", () => {
+    expect(formatBytes(512)).toBe("512 B");
+    expect(formatBytes(2_048)).toBe("2.0 KB");
+    expect(formatBytes(5_242_880)).toBe("5.0 MB");
+    expect(formatBytes(2_147_483_648)).toBe("2.00 GB");
   });
 });
 

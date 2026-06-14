@@ -116,11 +116,14 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 - [x] **CSP nonce validado** — build de produção (`npm run build`) OK; o Next.js injeta o nonce nos
       próprios scripts a partir do header CSP do middleware. Não é bug de produção.
 
-### Branch `refactor/dedup`
-- [ ] **`formatBytes`/`formatBps` duplicados** (3 arquivos) → consolidar em `lib/format.ts`.
-- [ ] **`handleTestUnifi`/`handleTestOmada` duplicados** (device-form vs bulk) → hook `useUnifiTest`/`useOmadaTest`.
-- [ ] **`MetricTile`/`InfoRow` duplicados** (dois drawers) → `components/drawer-primitives.tsx`.
-- [ ] **`SortButton`/`SortBtn` definidos dentro do render** — mover para escopo de módulo (evita remount).
+### Branch `refactor/dedup` ✅ CONCLUÍDA (parcial — ver follow-ups)
+- [x] **`formatBytes`/`formatBps` duplicados** — `formatBytes` consolidado em `lib/format.ts`; removidas as
+      3 cópias locais (devices/[id], unifi, system). `formatBps` local de devices/[id] também removido. +2 testes.
+- [x] **`MetricTile`/`InfoRow` duplicados** — extraídos para `components/drawer-primitives.tsx` (versão superset).
+- [ ] _Follow-up (cosmético): `SortButton`/`SortBtn` dentro do render → escopo de módulo (exige props nos call sites;
+      ganho de perf mínimo em botões triviais)._
+- [ ] _Follow-up (risco em form): `handleTestUnifi`/`handleTestOmada` (device-form-protocols vs bulk) → hook
+      compartilhado. Adiado por tocar lógica de formulário em dois lugares._
 
 ### Branch `refactor/misc`
 - [ ] **Busca de IP usa `startsWith`** — `devices/page.tsx:276` — trocar por `includes` (achar octeto do meio).
