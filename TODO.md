@@ -131,14 +131,17 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 - [ ] **`DeviceStatus` guarda JSON sem limite nem pruning** — limitar lista de clientes/leases; podar tabela.
 - [ ] **`countdown-badge.tsx` — `rafRef` guarda `setInterval`** — renomear (clareza).
 
-### Branch `test/coverage-gaps`
-- [ ] **Zero testes para `/api/users/[id]/totp`** (geração/verificação/criptografia de segredo).
-- [ ] **Zero testes para `/api/auth/logout`** (blacklist JWT, idempotência, limpeza de cookie).
-- [ ] **Zero testes para `/api/auth/check-2fa`**.
-- [ ] **`expect([201, 400]).toContain()`** em `api-auth.test.ts:112` não testa nada — definir comportamento esperado.
-- [ ] **`useFakeTimers`/`useRealTimers` sem `afterEach`** — `scheduler-startup.test.ts` — risco de flakiness entre testes.
-- [ ] **Caminho de alerta do scheduler sem teste** — `safeRun` (claim atômico `updateMany`, cooldown,
-      `sendAlert`); exige fake timers + mock de `@/worker/monitors/alert`.
+### Branch `test/coverage-gaps` ✅ CONCLUÍDA (parcial — ver follow-up)
+- [x] **Testes para `/api/users/[id]/totp`** — `users-totp.test.ts` (GET/POST/DELETE: admin+self, 403, 404,
+      token inválido 422, formato 400, secret obrigatório, criptografia no enable, disable). 10 casos.
+- [x] **Testes para `/api/auth/logout`** — `auth-logout.test.ts` (blacklist do jti, idempotência, sem jti,
+      sem sessão, limpeza de cookie). 4 casos.
+- [x] **Testes para `/api/auth/check-2fa`** — `auth-check-2fa.test.ts` (true/false, inexistente, sem username). 4 casos.
+- [x] **`expect([201, 400]).toContain()`** — corrigido para `toBe(400)` (schema limita name a 100 chars).
+- [x] **`useFakeTimers`/`useRealTimers`** — já seguro: o `afterEach` chama `jest.useRealTimers()` antes do shutdown,
+      garantindo a limpeza mesmo em falha. Nenhuma mudança necessária.
+- [ ] _Follow-up: caminho de alerta do scheduler (`safeRun`: claim atômico, cooldown, `sendAlert`) —
+      exige fake timers + mock de `@/worker/monitors/alert`._
 
 ### Branch `chore/deps`
 - [ ] **`next-auth` em beta não pinada** — `package.json` `"^5.0.0-beta.31"` → pin exato (item SEC-025 original).
