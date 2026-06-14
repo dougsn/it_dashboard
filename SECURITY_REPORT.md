@@ -303,7 +303,7 @@ Quatro endpoints exigiam apenas `requireAuth()`: `POST /api/devices/check` (disp
 **Resolvido em:** branch `fix/credential-exposure`
 
 `sanitizeDevice()` removia os campos `*Enc` mas deixava passar o campo legado `snmpCommunity` (texto claro) no `...rest`, retornando-o a todos os usuários autenticados (incluindo VIEWER). Para dispositivos criados antes da migração para colunas criptografadas, a community SNMP real ficava exposta. **Correção:** `sanitizeDevice()` agora remove `snmpCommunity` e `snmpCommunityEnc`, expondo `hasSnmpCredentials: boolean`. O campo virou write-only no form (em branco no edit, só atualiza se preenchido). Coberto por `__tests__/api/devices.test.ts`.
-_Nota: o `POST /api/devices/bulk` ainda grava a community em texto claro na coluna `snmpCommunity` (criptografia-em-repouso não aplicada no bulk) — registrado no TODO como follow-up._
+_Atualização: o `POST /api/devices/bulk` agora também criptografa a community em `snmpCommunityEnc` (mesmo padrão dos demais handlers) — a coluna `snmpCommunity` em texto claro não é mais escrita. Coberto por `devices-bulk.test.ts`._
 
 ---
 

@@ -83,8 +83,8 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
       expõe `hasSnmpCredentials`. Campo virou write-only no form. Teste em `devices.test.ts`.
 - [x] **Erro interno do PostgreSQL vaza ao cliente** — `admin/stats`: msg genérica, erro logado no servidor.
 - [x] **`extractIp` confia cego em `X-Forwarded-For`** — só honra headers com `TRUST_PROXY=true`; documentado em `.env.example`.
-- [ ] _Follow-up: `POST /api/devices/bulk` grava community SNMP em texto claro na coluna (criptografia-em-repouso
-      não aplicada no bulk). Mover para o padrão `snmpCommunityEnc` como nos demais handlers._
+- [x] _Follow-up: `POST /api/devices/bulk` agora criptografa a community em `snmpCommunityEnc` (não grava mais
+      texto claro na coluna). Teste em `devices-bulk.test.ts`. ✅_
 
 ### Branch `fix/auth-hardening` ✅ CONCLUÍDA (SEC-030 aceito, SEC-032, SEC-037)
 - [x] **Enumeração via `/api/auth/check-2fa`** (SEC-030) — aceito por design: a feature exige revelar

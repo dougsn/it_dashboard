@@ -80,6 +80,18 @@ describe("POST /api/devices/bulk", () => {
     expect(callData[3].ip).toBe("192.168.1.103");
   });
 
+  it("SEC-031: encrypts SNMP community at rest, never stores it in plaintext", async () => {
+    mockAuth.mockResolvedValue(FAKE_SESSION as never);
+    (mockDb.device.createMany as jest.Mock).mockResolvedValue({ count: 4 });
+
+    await POST(makeReq({ ...BASE_PAYLOAD, snmpEnabled: true, snmpCommunity: "s3cr3t" }));
+
+    const callData = (mockDb.device.createMany as jest.Mock).mock.calls[0][0].data as Array<Record<string, unknown>>;
+    expect(callData[0].snmpCommunityEnc).toBeTruthy();
+    expect(callData[0].snmpCommunityEnc).not.toBe("s3cr3t");
+    expect(callData[0].snmpCommunity).toBeUndefined(); // plaintext column not written
+  });
+
   it("returns 400 when ipStart > ipEnd", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
     const res = await POST(makeReq({ ...BASE_PAYLOAD, ipStart: "192.168.1.200", ipEnd: "192.168.1.100" }));
