@@ -7,21 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Wifi, Server, AlertTriangle, Shield, KeyRound } from "lucide-react";
-
-function LighthouseIcon({ size = 24, className = "" }: { size?: number; className?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <line x1="12" y1="2" x2="12" y2="3.5" />
-      <line x1="8.5" y1="3" x2="9.8" y2="4.8" />
-      <line x1="15.5" y1="3" x2="14.2" y2="4.8" />
-      <circle cx="12" cy="7.5" r="2" />
-      <path d="M9.5 9.5h5" />
-      <path d="M9.5 9.5L8 21h8l-1.5-11.5" />
-      <line x1="6.5" y1="21" x2="17.5" y2="21" />
-      <path d="M11 21v-2.5A1 1 0 0 1 13 18.5V21" />
-    </svg>
-  );
-}
+import { LighthouseIcon } from "@/components/lighthouse-icon";
 
 const features = [
   {
