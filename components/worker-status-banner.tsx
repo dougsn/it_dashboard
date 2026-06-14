@@ -22,7 +22,7 @@ export function WorkerStatusBanner({ workerStatus, workerLastSeen }: WorkerStatu
       <AlertTriangle className="h-4 w-4 shrink-0" />
       <p className="text-sm font-medium">
         Worker parado · dados podem estar desatualizados
-        {ago && <span className="font-normal text-warning/80"> · última verificação {ago}</span>}
+        {ago && <span className="font-normal"> · última verificação {ago}</span>}
       </p>
     </div>
   );

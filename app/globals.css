@@ -88,7 +88,7 @@
   --success-foreground: #ffffff;
 
   /* Status — warning (degraded) */
-  --warning: #9f5f00;
+  --warning: #8c5500;
   --warning-foreground: #ffffff;
 
   /* Status — destructive (offline) */
@@ -98,7 +98,7 @@
   /* Charts */
   --chart-1: #5544e5;
   --chart-2: #0e7c3e;
-  --chart-3: #9f5f00;
+  --chart-3: #8c5500;
   --chart-4: #c0373b;
   --chart-5: #0ea5e9;
 
