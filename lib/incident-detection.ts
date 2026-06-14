@@ -56,6 +56,60 @@ export async function getOnlineTransitions(
   return byDevice;
 }
 
+export interface StatusEventRow {
+  deviceId: string;
+  isOnline: boolean;
+  pingMs: number | null;
+  timestamp: Date;
+}
+
+/**
+ * Like getOnlineTransitions, but also returns the rows where the high-latency
+ * bucket `(isOnline AND pingMs > threshold)` changed, and keeps pingMs — the
+ * minimal set needed to reconstruct the timeline's online/offline AND high-latency
+ * events without loading the full history.
+ *
+ * Note: unlike the previous in-memory version, an event is only emitted on a real
+ * rising edge of the latency bucket. The old code had an artifact where a device
+ * already slow at the window start emitted a spurious high-latency event on its
+ * second sample; that artifact is intentionally not reproduced.
+ */
+export async function getDeviceStatusEvents(
+  since: Date,
+  latencyThresholdMs = 150,
+  client: Pick<PrismaClient, "$queryRaw"> = db,
+): Promise<Map<string, StatusEventRow[]>> {
+  const rows = await client.$queryRaw<StatusEventRow[]>`
+    WITH ranked AS (
+      SELECT
+        "deviceId",
+        "isOnline",
+        "pingMs",
+        "timestamp",
+        LAG("isOnline") OVER w AS prev_online,
+        LAG("isOnline" AND COALESCE("pingMs", 0) > ${latencyThresholdMs}) OVER w AS prev_high,
+        ROW_NUMBER() OVER w AS rn
+      FROM "StatusHistory"
+      WHERE "timestamp" >= ${since}
+      WINDOW w AS (PARTITION BY "deviceId" ORDER BY "timestamp")
+    )
+    SELECT "deviceId", "isOnline", "pingMs", "timestamp"
+    FROM ranked
+    WHERE rn = 1
+       OR "isOnline" IS DISTINCT FROM prev_online
+       OR ("isOnline" AND COALESCE("pingMs", 0) > ${latencyThresholdMs}) IS DISTINCT FROM prev_high
+    ORDER BY "deviceId", "timestamp"
+  `;
+
+  const byDevice = new Map<string, StatusEventRow[]>();
+  for (const row of rows) {
+    const list = byDevice.get(row.deviceId);
+    if (list) list.push(row);
+    else byDevice.set(row.deviceId, [row]);
+  }
+  return byDevice;
+}
+
 /**
  * Reconstructs incidents from an ascending sequence of status rows. The first row
  * being offline counts as an incident already in progress at the window boundary

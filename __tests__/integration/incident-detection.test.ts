@@ -5,7 +5,7 @@
  * Run with: npm run test:integration
  */
 import { createTestDb } from "./db-helper";
-import { getOnlineTransitions, detectIncidents } from "@/lib/incident-detection";
+import { getOnlineTransitions, detectIncidents, getDeviceStatusEvents } from "@/lib/incident-detection";
 
 const db = createTestDb();
 const TEST_PREFIX = `integ-incident-${Date.now()}`;
@@ -75,5 +75,41 @@ describe("getOnlineTransitions (real SQL)", () => {
     expect(incidents).toHaveLength(1);
     expect(incidents[0].startAt).toBe(since.toISOString()); // boundary start
     expect(incidents[0].endAt).toBe(at(5).toISOString());
+  });
+});
+
+describe("getDeviceStatusEvents (real SQL — latency buckets)", () => {
+  let latDeviceId: string;
+  const lbase = new Date("2024-06-02T00:00:00Z").getTime();
+  const lat = (m: number) => new Date(lbase + m * 60_000);
+
+  beforeAll(async () => {
+    const device = await db.device.create({
+      data: { name: `${TEST_PREFIX}-lat`, ip: "10.77.0.2", type: "MIKROTIK", checkInterval: 60, alertThreshold: 3 },
+    });
+    latDeviceId = device.id;
+    // online low, online HIGH (rising edge), online still-high (redundant), online low (falling)
+    await db.statusHistory.createMany({
+      data: [
+        { deviceId: latDeviceId, isOnline: true, pingMs: 20,  timestamp: lat(0) },
+        { deviceId: latDeviceId, isOnline: true, pingMs: 200, timestamp: lat(1) }, // rising edge
+        { deviceId: latDeviceId, isOnline: true, pingMs: 300, timestamp: lat(2) }, // still high → collapsed
+        { deviceId: latDeviceId, isOnline: true, pingMs: 30,  timestamp: lat(3) }, // falling edge
+      ],
+    });
+  });
+
+  afterAll(async () => {
+    await db.statusHistory.deleteMany({ where: { deviceId: latDeviceId } });
+    await db.device.deleteMany({ where: { id: latDeviceId } });
+  });
+
+  it("returns only latency-bucket transitions (collapses the still-high row)", async () => {
+    const map = await getDeviceStatusEvents(lat(-10), 150, db);
+    const rows = map.get(latDeviceId)!;
+    const minutes = rows.map((r) => Math.round((r.timestamp.getTime() - lbase) / 60_000));
+    // first(0), rising(1), falling(3) — the redundant still-high row at 2 collapses out
+    expect(minutes).toEqual([0, 1, 3]);
+    expect(rows.find((r) => Math.round((r.timestamp.getTime() - lbase) / 60_000) === 1)?.pingMs).toBe(200);
   });
 });
