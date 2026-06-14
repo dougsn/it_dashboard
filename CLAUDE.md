@@ -233,6 +233,7 @@ app/
     devices/bulk/         # POST bulk-create by IP range
     status/[deviceId]/    # GET history (query: ?hours=24)
     health/               # GET system health + worker liveness (WorkerHeartbeat)
+    counts/               # GET lightweight device/link counts for sidebar badges (polled)
     overview/             # GET sparklines + link segments for dashboard
     incidents/            # GET paginated incident list derived from StatusHistory
     timeline/             # GET unified event timeline (devices + links, ?hours=24)

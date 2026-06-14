@@ -2809,6 +2809,28 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Versão ─────────────────────────────────────────────────────────────────
+  /api/counts:
+    get:
+      tags: [Sistema]
+      summary: Contagens para a sidebar
+      description: >
+        Contagens leves (via count queries) de dispositivos e links para os badges
+        da sidebar. Permite polling sem refazer o fetch das listas completas.
+      responses:
+        "200":
+          description: Contagens atuais.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devicesTotal: { type: integer, example: 42 }
+                  devicesOffline: { type: integer, example: 3 }
+                  linksOnline: { type: integer, example: 7 }
+                  linksTotal: { type: integer, example: 8 }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /api/version:
     get:
       tags: [Sistema]
@@ -2823,8 +2845,8 @@ paths:
               schema:
                 type: object
                 properties:
-                  version: { type: string, example: "0.1.0" }
-                  build: { type: integer, nullable: true, example: 142 }
+                  version: { type: string, example: "0.2.1" }
+                  build: { type: integer, nullable: true, example: 194 }
                   hash: { type: string, nullable: true, example: "a3f7b2c" }
 
 # ─── Parâmetros e respostas comuns ───────────────────────────────────────────

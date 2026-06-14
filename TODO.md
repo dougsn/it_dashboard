@@ -128,8 +128,10 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 - [x] **`MetricTile`/`InfoRow` duplicados** — extraídos para `components/drawer-primitives.tsx` (versão superset).
 - [x] _Follow-up (cosmético): `SortButton` (devices/[id]) e `SortBtn` (unifi) movidos para escopo de módulo
       com props `active`/`onClick` — não são mais recriados a cada render. ✅_
-- [ ] _Follow-up (risco em form): `handleTestUnifi`/`handleTestOmada` (device-form-protocols vs bulk) → hook
-      compartilhado. Adiado por tocar lógica de formulário em dois lugares._
+- [x] ~~Follow-up: `handleTestUnifi`/`handleTestOmada` → hook compartilhado~~ — **WON'T-DO** (decisão consciente):
+      a lógica substancial já está compartilhada em `lib/device-tests`; os wrappers diferem genuinamente
+      (device único cai para o próprio IP, bulk exige modo controller; mensagens diferentes; omada com sites
+      e `deviceId` só no protocols). Um hook precisaria de muitos parâmetros e seria uma abstração vazada.
 
 ### Branch `refactor/misc` ✅ CONCLUÍDA (parcial — ver follow-ups)
 - [x] **Busca de IP usa `startsWith`** — trocado por `includes` (acha octeto do meio).
@@ -137,8 +139,10 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 - [x] **`key={i}` instável em SSIDs** — omada/unifi usam `${ssid}-${band}-${i}`.
 - [x] _Follow-up: badge da sidebar agora atualiza ao vivo — novo `GET /api/counts` (count queries) + polling
       de 30s na sidebar. Teste em `counts.test.ts`. ✅_
-- [ ] _Follow-up: `DeviceStatus` guarda JSON de clientes/leases sem limite — capar lista antes de serializar
-      (tem implicação na exibição do detalhe; decidir o teto)._
+- [x] ~~Follow-up: capar JSON de clientes/leases do `DeviceStatus`~~ — **WON'T-DO por ora** (decisão consciente):
+      já há bound implícito de 8MB por resposta de controller (cap adicionado no `fix/worker-timeouts`) e o
+      `DeviceStatus` é uma linha por device (upsert, não cresce). Capar a lista esconderia clientes silenciosamente
+      no detalhe; precisaria de UI "mostrando X de N" para ser correto. Baixa prioridade.
 
 ### Branch `test/coverage-gaps` ✅ CONCLUÍDA (parcial — ver follow-up)
 - [x] **Testes para `/api/users/[id]/totp`** — `users-totp.test.ts` (GET/POST/DELETE: admin+self, 403, 404,
