@@ -414,17 +414,24 @@ export async function startScheduler() {
       }
     }
 
-    for (const snap of snapshots) {
-      const isNew = !timers.has(snap.id);
-      const lastUpdatedAt = deviceSnapshots.get(snap.id);
-      const configChanged = !!lastUpdatedAt && lastUpdatedAt.getTime() !== snap.updatedAt.getTime();
+    // Collect new/changed devices, then fetch them in a single query (avoids an
+    // N+1 of one findUnique per changed device).
+    const toReschedule = snapshots
+      .map((snap) => {
+        const isNew = !timers.has(snap.id);
+        const lastUpdatedAt = deviceSnapshots.get(snap.id);
+        const configChanged = !!lastUpdatedAt && lastUpdatedAt.getTime() !== snap.updatedAt.getTime();
+        return { id: snap.id, isNew, changed: isNew || configChanged };
+      })
+      .filter((s) => s.changed);
 
-      if (isNew || configChanged) {
-        const device = await db.device.findUnique({ where: { id: snap.id } });
-        if (!device) continue;
+    if (toReschedule.length > 0) {
+      const isNewById = new Map(toReschedule.map((s) => [s.id, s.isNew]));
+      const devices = await db.device.findMany({ where: { id: { in: toReschedule.map((s) => s.id) } } });
+      for (const device of devices) {
         scheduleDevice(device);
         deviceSnapshots.set(device.id, device.updatedAt);
-        log("info", isNew ? "Novo dispositivo adicionado." : "Dispositivo atualizado, reagendando.", {
+        log("info", isNewById.get(device.id) ? "Novo dispositivo adicionado." : "Dispositivo atualizado, reagendando.", {
           device: device.name,
         });
       }
