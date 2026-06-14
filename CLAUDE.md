@@ -40,6 +40,58 @@ Never commit directly to `master`. Never merge without explicit user approval.
 - Never let a documentation/refactor branch diverge from the code — if code branches land on master, rebase the docs branch before continuing.
 - When in doubt: `git log --oneline master..<branch>` to see how far ahead it is, and `git diff master...<branch> --stat` to see divergence.
 
+## Static Information — Post-Merge Update Protocol
+
+After merging any branch into master, evaluate whether the changes affect the system's static information and update accordingly **before closing the session**.
+
+### What to update and when
+
+| Artifact | File | Update when |
+|---|---|---|
+| **Changelog** | `app/(dashboard)/changelog/page.tsx` | Any feat, fix, security, refactor, or perf merged to master |
+| **Security report** | `SECURITY_REPORT.md` | Any security-related change (new finding, fix, config, auth) |
+| **System report** | `SYSTEM_REPORT.md` | Significant architecture changes, new modules, score changes |
+| **Build number** | `app/api/version/route.ts` | **Automatic** — derived from `git rev-list --count HEAD`, no action needed |
+
+### Changelog update rules (`app/(dashboard)/changelog/page.tsx`)
+
+The `RELEASES` array is the single source of truth for the changelog page. Keep it current.
+
+**When to add a new release entry:**
+- A meaningful set of features, fixes, or security patches lands on master
+- The release represents a coherent "version" from the user's perspective
+
+**When to amend the current latest release:**
+- A fix or small improvement ships that belongs to the same release cycle
+- The `latest: true` entry should always reflect everything in the current cycle
+
+**Entry format:**
+```ts
+{ type: "feat" | "fix" | "security" | "refactor" | "perf", text: "..." }
+```
+- `security` — auth changes, vulnerability fixes, crypto, rate limiting, audit
+- `feat` — new user-visible functionality
+- `fix` — bug corrections
+- `refactor` — internal improvements, DX, code quality
+- `perf` — measurable performance improvements
+
+Write entries from the **user's perspective**, not the developer's. "Página /profile com gerenciamento de 2FA" not "Added profile-client.tsx with TOTP state machine".
+
+### Security report update rules (`SECURITY_REPORT.md`)
+
+Edit the file directly — no scripts or database required. The page `/security` reads it statically.
+
+- Add a new finding (`SEC-NNN`) when a new vulnerability or risk is identified
+- Change status from `ABERTO` to `RESOLVIDO` when a fix lands on master
+- Update the summary counts at the top of the file
+- Date-stamp the last update
+
+### Enforcement
+
+This update step is **not optional** — static information that drifts from the codebase misleads both users and future development sessions. If the changes are minor (typo fix, style tweak, test), skip the update and note why. Otherwise, update before the session ends.
+
+---
+
 ## Common Commands
 
 ```bash
