@@ -14,13 +14,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Never commit directly to `master`. Never merge without explicit user approval.
 
+### One Branch Per Request — Critical Rule
+
+**Every user request opens its own branch.** The scope of the branch is exactly the scope of that request — no more, no less.
+
+**When the user asks for something new while a branch is already open:**
+
+1. Detect that the new request is off-topic from the current branch.
+2. Ask the user: *"Ainda estamos no escopo de `<branch-atual>` — isso foi concluído ou posso abrir uma branch separada para essa nova solicitação?"*
+3. If the current work **is done**: commit, merge, delete the branch, then open a new one for the new request.
+4. If the current work **is not done**: branch off the current branch — `git checkout -b type/new-topic` — resolve the new request there, merge it back into the working branch, then resume the original work.
+5. Never mix unrelated changes in the same branch — each branch must map to exactly one user request.
+
+**Branch lifecycle:**
+- Open the branch at the start of the request, before writing any code.
+- Delete the branch immediately after merging — never leave dead branches behind.
+- If multiple branches exist at the end of a session, list them and ask the user which to merge or discard before closing.
+
 ### Branch Staleness — Critical Rule
 
 **A branch must live only as long as its work session.** Once a feature or fix is merged, the branch is deleted immediately. If a branch is left open and master moves forward, the branch will diverge and create conflicts.
 
 **Rules to prevent stale branches:**
-- Never start a new branch if an open branch from the same session is waiting for merge approval. Finish one before starting another.
-- If multiple branches exist at the end of a session, list them explicitly and ask the user which to merge or discard before closing.
 - If work on a branch spans more than one session, rebase or merge master into the branch at the start of the new session (`git merge master`) before continuing.
 - Never let a documentation/refactor branch diverge from the code — if code branches land on master, rebase the docs branch before continuing.
 - When in doubt: `git log --oneline master..<branch>` to see how far ahead it is, and `git diff master...<branch> --stat` to see divergence.
