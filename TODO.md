@@ -148,8 +148,8 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 - [x] **`expect([201, 400]).toContain()`** — corrigido para `toBe(400)` (schema limita name a 100 chars).
 - [x] **`useFakeTimers`/`useRealTimers`** — já seguro: o `afterEach` chama `jest.useRealTimers()` antes do shutdown,
       garantindo a limpeza mesmo em falha. Nenhuma mudança necessária.
-- [ ] _Follow-up: caminho de alerta do scheduler (`safeRun`: claim atômico, cooldown, `sendAlert`) —
-      exige fake timers + mock de `@/worker/monitors/alert`._
+- [x] _Follow-up: caminho de alerta do scheduler coberto por `scheduler-alert.test.ts` (claim atômico,
+      cooldown count===1, sem re-alerta após threshold, count 0 não envia). ✅_
 
 ### Branch `chore/deps` ✅ CONCLUÍDA
 - [x] **`next-auth` em beta não pinada** — pin exato `"5.0.0-beta.31"` (remove `^`).
