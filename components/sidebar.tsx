@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Server, Network, LogOut, AlertCircle, FileText, RadioTower, Wifi, Router, Users, Settings, ClipboardList, History, ShieldCheck, BookOpen, Code2 } from "lucide-react";
+import { LayoutDashboard, Server, Network, LogOut, AlertCircle, FileText, RadioTower, Wifi, Router, Users, Settings, ClipboardList, History, ShieldCheck, BookOpen, Code2, FlaskConical } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 interface SidebarCounts {
@@ -288,6 +288,12 @@ export function Sidebar({
               icon={Code2}
               active={pathname.startsWith("/dev-manual")}
             />
+            <NavItem
+              href="/test-manual"
+              label="Manual Testes"
+              icon={FlaskConical}
+              active={pathname.startsWith("/test-manual")}
+            />
           </>
         )}
       </nav>
@@ -321,7 +327,7 @@ export function Sidebar({
         </div>
       </div>
       {version && (
-        <div className="pt-2 text-center text-[9.5px] text-muted-foreground/35 font-mono tracking-wide select-none">
+        <div className="pt-2 text-center text-[9.5px] text-muted-foreground font-mono tracking-wide select-none">
           {version}
         </div>
       )}
