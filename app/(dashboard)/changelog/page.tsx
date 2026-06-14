@@ -34,6 +34,7 @@ const RELEASES: Release[] = [
       { type: "fix", text: "Trocar o período nos gráficos não embaralha mais os dados (corridas de requisição canceladas corretamente)" },
       { type: "fix", text: "Cadastro valida formato de IP; filtros de data inválidos retornam erro claro; formulários impedem envio duplicado" },
       { type: "perf", text: "Índices de banco em tipo de dispositivo, links Mikrotik e auditoria por IP; exportações e listas de eventos com limite de memória" },
+      { type: "perf", text: "Detecção de incidentes processada no banco (consulta por transições) — a página de incidentes escala para janelas longas sem carregar todo o histórico na memória" },
       { type: "fix", text: "Acessibilidade: cards e linhas clicáveis navegáveis por teclado, estados ARIA (pressed/expanded/sort) em filtros, seções e tabelas, e rótulo no botão Voltar" },
       { type: "fix", text: "Busca de dispositivos por IP encontra trechos no meio do endereço (ex: '168.1'), não apenas o início" },
       { type: "refactor", text: "Qualidade interna: helpers de formatação e componentes de drawer deduplicados; cobertura de testes ampliada para 2FA, logout e autorização por papel (580 testes); dependências atualizadas" },
