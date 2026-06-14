@@ -18,10 +18,29 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: "0.2.0",
+    date: "14 Jun 2026",
+    label: "Segurança e acessibilidade",
+    latest: true,
+    changes: [
+      { type: "security", text: "Autenticação em dois fatores (TOTP/2FA) — ativação via QR code, compatível com Google Authenticator e Authy" },
+      { type: "security", text: "Gerenciamento de 2FA por usuário na página de administração — admins podem ativar/desativar para qualquer conta" },
+      { type: "security", text: "session.user.id agora exposto corretamente pelo callback de sessão do NextAuth" },
+      { type: "feat", text: "Página /profile — cada usuário gerencia seu próprio 2FA e visualiza informações da conta" },
+      { type: "feat", text: "Manual do usuário integrado (/manual) — documentação completa da plataforma em 10 seções" },
+      { type: "feat", text: "Manual do desenvolvedor (/dev-manual) — arquitetura, padrões e guias internos, restrito a administradores" },
+      { type: "refactor", text: "Rodapé da sidebar vira link para /profile; nome e role do usuário clicáveis" },
+      { type: "refactor", text: "Coluna 2FA na tabela de usuários com badge de status Ativo/Inativo" },
+      { type: "fix", text: "Contraste WCAG AA corrigido em todos os elementos — muted-foreground, primary, success, warning, destructive" },
+      { type: "fix", text: "Acessibilidade: aria-labels em botões ícone-apenas, aria-hidden em ícones decorativos, landmarks únicos" },
+      { type: "fix", text: "Migrações alert_fields e rate_limit_table aplicadas ao banco de dados" },
+    ],
+  },
+  {
     version: "0.1.0",
     date: "13 Jun 2026",
     label: "Release inicial",
-    latest: true,
+    latest: false,
     changes: [
       { type: "security", text: "Auditoria de segurança completa — 24 achados documentados (SEC-001 a SEC-024), todos os críticos e altos resolvidos" },
       { type: "security", text: "SEC-019: criação em massa de dispositivos restringida ao perfil OPERADOR" },
