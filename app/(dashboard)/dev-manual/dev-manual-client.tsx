@@ -43,6 +43,7 @@ const SECTIONS: Section[] = [
       { id: "db-schema",      title: "Schema" },
       { id: "db-migrations",  title: "Migrations" },
       { id: "db-client",      title: "Prisma client" },
+      { id: "db-queries",     title: "Queries pesadas (SQL)" },
     ],
   },
   { id: "api",          title: "Rotas de API",             icon: Network,
@@ -473,6 +474,24 @@ const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 export const db = globalForPrisma.prisma ?? new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
 `}</Block>
+
+            <H2 id="db-queries">Queries pesadas no banco (window functions)</H2>
+            <P>Endpoints que antes carregavam todo o <Code>StatusHistory</Code> da janela em memória para
+              detectar incidentes ou montar relatórios foram movidos para SQL, evitando trafegar milhões
+              de linhas. Há dois módulos dedicados:</P>
+            <P><Code>lib/incident-detection.ts</Code> — <Code>getOnlineTransitions</Code> /
+              <Code>getDeviceStatusEvents</Code> usam a window function <Code>LAG()</Code> para retornar
+              apenas as linhas onde o estado mudou (transição de online/offline ou de bucket de
+              alta-latência), mais a primeira e a última da janela. <Code>detectIncidents</Code> reconstrói
+              os incidentes a partir dessa sequência reduzida — provadamente idêntico ao algoritmo em memória,
+              pois incidentes dependem só dos pontos de transição e das bordas.</P>
+            <P><Code>lib/report-queries.ts</Code> — <Code>getDeviceReportStats</Code> calcula todas as
+              estatísticas numa passada com <Code>COUNT/AVG/MIN/MAX FILTER (WHERE ...)</Code>;
+              <Code>getDeviceChartSamples</Code> faz o downsample dos gráficos com um stride no próprio SQL
+              (<Code>idx % ceil(total/maxPoints)</Code>), equivalente ao stride em JS de antes.</P>
+            <Callout variant="info">As funções aceitam um cliente Prisma opcional (default = singleton
+              global) para que os testes de integração (<Code>incident-detection.test.ts</Code>) rodem o SQL
+              real contra o PostgreSQL de teste.</Callout>
           </Sec>
 
           {/* ── API ──────────────────────────────────────────────────── */}

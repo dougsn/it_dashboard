@@ -1,7 +1,7 @@
 # Relatório de Segurança — WatchIT Tower
 
-**Última atualização:** 2026-06-14 (v0.2.0 — SEC-028/029/031/032/033/036/037 resolvidos, SEC-030 aceito; SEC-021 completado)  
-**Versão do sistema:** 0.2.0  
+**Última atualização:** 2026-06-14 (v0.2.1 — SEC-028/029/031/032/033/036/037 resolvidos, SEC-030 aceito; SEC-021 completado; community SNMP criptografada também no bulk-create)  
+**Versão do sistema:** 0.2.1  
 **Analista:** Análise automatizada via Claude Code  
 **Escopo:** Código-fonte completo — Next.js 14 (frontend/API), worker de monitoramento, banco PostgreSQL
 
