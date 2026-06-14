@@ -1,7 +1,7 @@
 # Relatório de Segurança — WatchIT Tower
 
-**Última atualização:** 2026-06-14 (feat/omada-ap-integration — SEC-009, SEC-012, SEC-014, SEC-017, SEC-018, SEC-021 resolvidos)  
-**Versão do sistema:** 0.1.0  
+**Última atualização:** 2026-06-14 (v0.2.0 — 2FA, JWT blacklist, rate limit persistente, SSRF; contraste WCAG AA em todos os elementos)  
+**Versão do sistema:** 0.2.0  
 **Analista:** Análise automatizada via Claude Code  
 **Escopo:** Código-fonte completo — Next.js 14 (frontend/API), worker de monitoramento, banco PostgreSQL
 

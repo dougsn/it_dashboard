@@ -1,7 +1,7 @@
 # Relatório Geral do Sistema — WatchIT Tower
 
 **Data:** 2026-06-14  
-**Versão:** 0.1.0  
+**Versão:** 0.2.0  
 **Analista:** Claude Code (claude-sonnet-4-6)  
 **Escopo:** Código-fonte completo — Next.js 14 App Router, worker Node.js, Prisma 7 + PostgreSQL
 
@@ -11,16 +11,16 @@
 
 WatchIT Tower é um dashboard de monitoramento de TI para uso exclusivamente local, sem exposição à internet. Monitora roteadores Mikrotik, câmeras, DVRs, APs UniFi e Omada via ICMP, HTTP, SNMP, RouterOS API e controllers de Wi-Fi.
 
-**Nota atual estimada: 9.2/10**
+**Nota atual estimada: 9.4/10**
 
 | Dimensão | Nota | Tendência |
 |---|---|---|
-| Segurança | 9.0 | ↑ (2FA, JWT blacklist, rate limit persistente, SSRF, bodySizeLimit) |
-| Arquitetura | 8.8 | ↑ (startup timeout, graceful shutdown testado, Omada monitor) |
-| Usabilidade | 8.5 | → (todos os blocos UX implementados) |
-| Design | 9.0 | ↑ (tokens CSS unificados em report-view, dark mode) |
-| Testes | 8.8 | ↑ (scheduler-startup.test.ts, omada.test.ts, ~547+ testes, 63+ suites) |
-| Documentação | 9.0 | ↑ (OpenAPI atualizado, todos os endpoints documentados) |
+| Segurança | 9.0 | → (2FA, JWT blacklist, rate limit persistente, SSRF, bodySizeLimit) |
+| Arquitetura | 8.8 | → (startup timeout, graceful shutdown testado, Omada monitor) |
+| Usabilidade | 8.8 | ↑ (perfil do usuário com 2FA, gerenciamento admin de 2FA) |
+| Design | 9.2 | ↑ (contraste WCAG AA round 3 — warning, sidebar, regiões roláveis) |
+| Testes | 9.0 | ↑ (test-manual documentado, ~560+ testes, 67 arquivos) |
+| Documentação | 9.5 | ↑ (dev-manual + test-manual integrados, README reescrito) |
 
 ---
 
@@ -101,7 +101,7 @@ Worker (Node.js separado)
 
 ## 3. Usabilidade
 
-### Estado atual (todos os blocos UX implementados)
+### Estado atual
 
 - **WorkerStatusBanner** — alerta quando worker está parado
 - **ConfirmDialog** — substitui `window.confirm()` em todas as operações destrutivas
@@ -112,6 +112,8 @@ Worker (Node.js separado)
 - **Filtros de dispositivos** — por status, tipo, localização e busca por texto (com URL params)
 - **Breadcrumbs** — em páginas de detalhe de dispositivo e link
 - **Validação inline** — campos validados enquanto o usuário digita (react-hook-form + zod)
+- **Página /profile** — cada usuário gerencia seu 2FA, visualiza role e data de criação
+- **Gerenciamento de 2FA em /users** — admin ativa/desativa TOTP por conta, badge de status na tabela
 
 ### Pendências menores
 
@@ -128,13 +130,13 @@ Worker (Node.js separado)
 
 - **Design system:** shadcn/ui v4 (Base UI) com tokens CSS — consistente
 - **Dark mode:** Funcionando via `ThemeProvider` + CSS class strategy
-- **Acessibilidade:** WCAG 2.1 AA — `aria-label` em todas as tabelas, `role="status"` nos KPIs, `htmlFor` em todos os inputs
+- **Acessibilidade:** WCAG 2.1 AA — contraste corrigido em 3 rounds (primary, success, warning, muted-foreground, version text); `aria-label` em todas as tabelas, landmarks únicos, `tabIndex={0}` em regiões roláveis
 - **Responsividade:** Grid responsivo nos cards e tabelas com `overflow-x-auto`
-- **Tokens CSS:** `report-view.tsx` migrado de classes Tailwind hardcoded para `text-muted-foreground`, `text-foreground`, `bg-card`, `border-border`, `border-border/50`
+- **Tokens CSS:** Todos os componentes usam tokens semânticos (`text-muted-foreground`, `bg-card`, `border-border`, etc.)
+- **Cor warning:** `#8c5500` (light) — passa 5.0:1 mesmo sobre fundos `bg-warning/10`
 
 ### Inconsistências remanescentes
 
-- `report-view.tsx` ainda usa `bg-emerald-50`, `bg-amber-50` em células de status (não mapeável diretamente para token semântico sem definir `--color-success-muted`)
 - Mistura de `h-7`/`h-8` em botões de ação em algumas páginas (impacto visual negligenciável)
 
 ---
@@ -143,18 +145,28 @@ Worker (Node.js separado)
 
 ### Cobertura atual
 
-- **~547+ testes** em ~63+ suites
-- **Integração:** `__tests__/integration/webhook-flow.test.ts`
+- **~560+ testes** em **67 arquivos** de suíte
+- **Integração:** `__tests__/integration/` — devices CRUD, webhook e2e (PostgreSQL real)
+- **Carga:** `__tests__/worker/load.test.ts` — 50 dispositivos × 1s interval (excluído do npm test)
 - **Scheduler startup:** `__tests__/worker/scheduler-startup.test.ts` (9 testes)
 - **Omada monitor:** `__tests__/worker/omada.test.ts`
-- **Segurança:** `__tests__/security/api-auth.test.ts` (401 em todas as rotas protegidas)
+- **Segurança:** `__tests__/security/api-auth-full.test.ts` (401 em todas as rotas protegidas)
+
+### Distribuição por camada
+
+| Camada | Arquivos | Ambiente |
+|---|---|---|
+| API Routes | 29 | node |
+| Worker Monitors | 9 | node |
+| Componentes React | 16 | jsdom |
+| Bibliotecas (`lib/`) | 5 | node |
+| Segurança | 2 | node |
+| Integração | 3 | node + PostgreSQL real |
 
 ### Lacunas remanescentes
 
 | Área | Arquivo ausente | Criticidade |
 |---|---|---|
-| Admin routes | `__tests__/api/admin-cleanup.test.ts` | Média |
-| Admin routes | `__tests__/api/admin-config.test.ts` | Média |
 | Audit trail em CRUD | Testes existentes não validam `AuditLog` escrito | Baixa |
 | TOTP flow | Testes de integração do fluxo de login com 2FA | Baixa |
 
@@ -162,7 +174,7 @@ Worker (Node.js separado)
 
 - Cobertura total do scheduler (`runChecks`, `pruneHistory`, `pollLinks`, `shutdown`, `startScheduler`)
 - Todos os monitors têm testes unitários
-- Todos os endpoints de API têm testes de unidade
+- Todos os endpoints de API têm testes de unidade e de autenticação (401)
 - Webhook flow testado end-to-end
 
 ---
@@ -173,11 +185,14 @@ Worker (Node.js separado)
 
 | Artefato | Estado |
 |---|---|
-| `CLAUDE.md` | Atualizado com arquitetura, comandos e convenções atuais |
+| `CLAUDE.md` | Atualizado — diretriz de branch por request, protocolo de atualização de docs pós-merge |
 | `SECURITY_REPORT.md` | Atualizado — 27 achados, 24 resolvidos, 3 abertos (infra) |
-| `SYSTEM_REPORT.md` | Este arquivo — atualizado em 2026-06-14 |
+| `SYSTEM_REPORT.md` | Este arquivo — atualizado em 2026-06-14 (v0.2.0) |
+| `README.md` | Reescrito com stack atual (Next.js 16, React 19, Prisma 7), todos os protocolos e schema |
 | `docs/openapi.yaml` | Atualizado com todos os endpoints (admin, users, totp, audit, etc.) |
-| `README.md` | Básico, sem diagrama de arquitetura |
+| `/manual` | Manual do usuário integrado — 10 seções, acessível a todos os perfis |
+| `/dev-manual` | Manual do desenvolvedor — 16 seções de arquitetura e padrões, restrito a ADMIN |
+| `/test-manual` | Manual de testes — 12 seções cobrindo estratégia, Jest config, todas as suítes, restrito a ADMIN |
 
 ### Endpoints documentados no OpenAPI
 
@@ -189,5 +204,5 @@ Todos os 17+ endpoints principais estão documentados incluindo: `/api/admin/aud
 
 1. **Infra (alta prioridade):** Configurar reverse proxy com TLS (Caddy, nginx) para produção — SEC-005
 2. **Refactor (médio prazo):** Extrair `testUnifiConnection`/`testOmadaConnection` para `lib/test-connection.ts` para eliminar duplicação entre `device-form` e `bulk-device-form`
-3. **Testes (baixa prioridade):** Adicionar testes para rotas admin e fluxo de login com 2FA
+3. **Testes (baixa prioridade):** Adicionar testes de integração para fluxo de login com 2FA
 4. **Dependências:** Fazer pin do `next-auth@5` quando versão estável for lançada (ver TODO.md)

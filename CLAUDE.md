@@ -210,6 +210,22 @@ app/
       page.tsx            # Incidents history page (paginated)
     security/
       page.tsx            # Security findings from SECURITY_REPORT.md (static, no DB)
+    profile/
+      page.tsx            # User profile + 2FA self-management (all roles)
+    changelog/
+      page.tsx            # Release history — RELEASES array is source of truth
+    manual/
+      page.tsx            # User manual — 10 sections, accessible to all roles
+    dev-manual/
+      page.tsx            # Developer manual — architecture and patterns (ADMIN only)
+    test-manual/
+      page.tsx            # Test strategy manual — 12 sections covering all suites (ADMIN only)
+    users/
+      page.tsx            # User management: create, edit, 2FA toggle (ADMIN only)
+    system/
+      page.tsx            # DB metrics and log retention control (ADMIN only)
+    audit/
+      page.tsx            # Audit trail with filters and CSV export (ADMIN only)
   api/
     auth/[...nextauth]/   # NextAuth handler
     devices/              # GET all (supports ?type=), POST create
