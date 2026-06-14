@@ -110,6 +110,10 @@ model StatusHistory {
   timestamp DateTime @default(now())
 
   @@index([deviceId, timestamp])
+  // Fleet-wide time-range queries (health uptime%, overview sparklines, timeline,
+  // incidents, pruning) filter by timestamp alone — the composite index above can't
+  // serve those, so they'd seq-scan the whole table without this.
+  @@index([timestamp])
 }
 
 model User {
@@ -184,6 +188,8 @@ model LinkEvent {
   timestamp DateTime      @default(now())
 
   @@index([linkId, timestamp])
+  // overview's "last event before window" (DISTINCT ON) and pruning filter by timestamp alone
+  @@index([timestamp])
 }
 
 model WorkerHeartbeat {
