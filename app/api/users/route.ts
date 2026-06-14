@@ -19,7 +19,7 @@ export async function GET() {
   if (unauth) return unauth;
 
   const users = await db.user.findMany({
-    select: { id: true, username: true, role: true, createdAt: true },
+    select: { id: true, username: true, role: true, totpEnabled: true, createdAt: true },
     orderBy: { createdAt: "asc" },
   });
 
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   const hashed = await bcrypt.hash(password, 12);
   const user = await db.user.create({
     data: { username, password: hashed, role },
-    select: { id: true, username: true, role: true, createdAt: true },
+    select: { id: true, username: true, role: true, totpEnabled: true, createdAt: true },
   });
 
   void writeAudit({ action: "CREATE", entity: "User", entityId: user.id, entityName: user.username, details: { role } });
