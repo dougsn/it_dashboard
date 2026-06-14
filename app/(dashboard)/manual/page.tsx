@@ -266,6 +266,7 @@ export default function ManualPage() {
         {/* Manual sidebar */}
         <aside
           aria-label="Índice do manual"
+          tabIndex={0}
           className={cn(
             "w-60 shrink-0 border-r border-border bg-card overflow-y-auto sticky top-0 h-[calc(100vh-57px)] transition-all duration-200",
             sidebarOpen ? "block" : "hidden lg:block"
@@ -317,7 +318,7 @@ export default function ManualPage() {
         </aside>
 
         {/* Content */}
-        <div ref={contentRef} className="flex-1 min-w-0 overflow-y-auto">
+        <div ref={contentRef} tabIndex={0} className="flex-1 min-w-0 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-8 py-8">
 
             {/* ── Introdução ──────────────────────────────────────── */}

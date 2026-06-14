@@ -244,6 +244,7 @@ export default function DevManualClient() {
         {/* Sidebar */}
         <aside
           aria-label="Índice do manual do desenvolvedor"
+          tabIndex={0}
           className={cn(
             "w-64 shrink-0 border-r border-border bg-card overflow-y-auto sticky top-0 h-[calc(100vh-57px)] transition-all duration-200",
             sidebarOpen ? "block" : "hidden lg:block"
