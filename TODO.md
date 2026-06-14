@@ -11,16 +11,13 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 
 ## 🔴 P0 — Segurança crítica (corrigir primeiro)
 
-### Branch `fix/viewer-authorization`
-- [ ] ✓ **VIEWER obtém webhook tokens e manipula links** — `app/api/links/route.ts:31`
-      `GET /api/links` (só `requireAuth`) devolve `webhookToken` HMAC de todos os links a qualquer
-      autenticado; com o token, `POST /links/:id/up|down` dispensa sessão. Omitir `webhookToken` do
-      payload para papéis abaixo de OPERADOR.
-- [ ] ✓ **VIEWER dispara operações de rede e lê tráfego ao vivo** — trocar `requireAuth()` → `requireRole("OPERADOR")` em:
-      `app/api/devices/check/route.ts:10`, `app/api/devices/[id]/check/route.ts:10`,
-      `app/api/links/test-traffic/route.ts:15`, `app/api/links/[id]/live-traffic/route.ts:11`
-- [ ] **Testes de autorização** — adicionar casos esperando 403 para VIEWER nos 5 endpoints acima
-      (`__tests__/security/`); hoje passariam confirmando a falha.
+### Branch `fix/viewer-authorization` ✅ CONCLUÍDA (SEC-028, SEC-029)
+- [x] ✓ **VIEWER obtém webhook tokens e manipula links** — `app/api/links/route.ts`
+      `GET /api/links` agora resolve papel via `getSessionRole()`; `webhookToken` só para OPERADOR+.
+- [x] ✓ **VIEWER dispara operações de rede e lê tráfego ao vivo** — `requireRole("OPERADOR")` em
+      `devices/check`, `devices/[id]/check`, `links/test-traffic`, `links/[id]/live-traffic`.
+- [x] **Testes de autorização** — `__tests__/security/viewer-authorization.test.ts` (8 testes: VIEWER→403,
+      OPERADOR→ok, webhookToken ausente p/ VIEWER e presente p/ OPERADOR).
 
 ### Branch `fix/password-change-revocation`
 - [ ] ✓ **`passwordChangedAt` é controle de segurança morto** — `prisma/schema.prisma:125`

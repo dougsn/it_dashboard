@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAuth } from "@/lib/with-auth";
+import { requireRole } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { checkLinkTraffic } from "@/worker/monitors/link-traffic";
 import { resolveRouterosCredentials } from "@/lib/crypto";
@@ -12,7 +12,8 @@ const schema = z.object({
 });
 
 export async function POST(req: Request) {
-  const unauth = await requireAuth();
+  // SEC-029: decrypts RouterOS credentials and hits the device — restrict to OPERADOR+
+  const unauth = await requireRole("OPERADOR");
   if (unauth) return unauth;
   const raw = await parseBody(req);
   if (!raw.ok) return raw.response;

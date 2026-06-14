@@ -1,6 +1,6 @@
 # Relatório de Segurança — WatchIT Tower
 
-**Última atualização:** 2026-06-14 (v0.2.0 — 2FA, JWT blacklist, rate limit persistente, SSRF; contraste WCAG AA em todos os elementos)  
+**Última atualização:** 2026-06-14 (v0.2.0 — SEC-028/SEC-029 resolvidos: autorização por papel em webhook tokens e operações de rede)  
 **Versão do sistema:** 0.2.0  
 **Analista:** Análise automatizada via Claude Code  
 **Escopo:** Código-fonte completo — Next.js 14 (frontend/API), worker de monitoramento, banco PostgreSQL
@@ -14,11 +14,11 @@ O WatchIT Tower é uma aplicação interna para monitoramento de equipamentos de
 | Severidade | Total | Resolvido | Aberto |
 |-----------|-------|-----------|--------|
 | 🔴 Crítico  | 1     | 1         | 0      |
-| 🟠 Alto     | 3     | 3         | 0      |
-| 🟡 Médio    | 4     | 3         | 1      |
+| 🟠 Alto     | 4     | 4         | 0      |
+| 🟡 Médio    | 5     | 4         | 1      |
 | 🔵 Baixo    | 3     | 1         | 2      |
 | ℹ️ Info     | 16    | 12 + 4⚠️  | 0      |
-| **Total**  | **27**| **24**    | **3**  |
+| **Total**  | **29**| **26**    | **3**  |
 
 > ⚠️ = Aceito / won't-fix por design intencional ou limitação de framework
 
@@ -274,6 +274,24 @@ Ver SEC-012. `parse-body.ts` rejeita corpos acima de 1 MB com `413`. `next.confi
 **Resolvido em:** branch `feat/omada-ap-integration`
 
 Campo `version Int @default(1)` no modelo `User`. `PUT /api/users/[id]` retorna `409 Conflict` se versão enviada diverge da versão no banco. Versão incrementada com `{ increment: 1 }` em cada update.
+
+---
+
+### SEC-028 — Webhook tokens expostos a VIEWER permitem controle de estado dos links
+**Severidade:** 🟠 ALTO — ✅ RESOLVIDO
+**Categoria:** Quebra de controle de acesso (OWASP A01)
+**Resolvido em:** branch `fix/viewer-authorization`
+
+`GET /api/links` retornava o `webhookToken` (HMAC-SHA256 determinístico de cada link) para qualquer usuário autenticado, incluindo VIEWER. Como os endpoints `POST /api/links/:id/up|down` são autenticados apenas pelo token (sem sessão, por design — ver SEC-016), um VIEWER obtinha todos os tokens via GET e manipulava o estado UP/DOWN de qualquer link. **Correção:** `GET /api/links` agora resolve o papel via `getSessionRole()` e só inclui `webhookToken` no payload para OPERADOR+. Coberto por `__tests__/security/viewer-authorization.test.ts`.
+
+---
+
+### SEC-029 — VIEWER dispara operações de rede ativas e leitura de tráfego ao vivo
+**Severidade:** 🟡 MÉDIO — ✅ RESOLVIDO
+**Categoria:** Quebra de controle de acesso (OWASP A01)
+**Resolvido em:** branch `fix/viewer-authorization`
+
+Quatro endpoints exigiam apenas `requireAuth()`: `POST /api/devices/check` (dispara `runChecks` em toda a frota), `POST /api/devices/:id/check`, `POST /api/links/test-traffic` e `GET /api/links/:id/live-traffic` (ambos decriptam credenciais RouterOS e fazem chamada real ao Mikrotik). Um VIEWER podia gerar carga de rede e usar os checks como ferramenta de reconhecimento. **Correção:** os quatro agora exigem `requireRole("OPERADOR")`. Coberto por `__tests__/security/viewer-authorization.test.ts`.
 
 ---
 
