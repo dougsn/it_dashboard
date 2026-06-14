@@ -36,11 +36,12 @@ const RELEASES: Release[] = [
       { type: "perf", text: "Índices de banco em tipo de dispositivo, links Mikrotik e auditoria por IP; exportações e listas de eventos com limite de memória" },
       { type: "perf", text: "Detecção de incidentes, timeline e relatórios processados no banco (transições e agregações) — escalam para janelas longas e frotas grandes sem carregar todo o histórico na memória" },
       { type: "perf", text: "Índice por data no histórico de status e eventos de link — painel, saúde do sistema e limpeza deixam de varrer a tabela inteira (consultas por período ~centenas de vezes mais rápidas em bases grandes)" },
+      { type: "perf", text: "Sparklines do painel buscam só os últimos pontos por dispositivo no banco; reconcile do worker agrupa dispositivos alterados numa única consulta" },
       { type: "fix", text: "Acessibilidade: cards e linhas clicáveis navegáveis por teclado, estados ARIA (pressed/expanded/sort) em filtros, seções e tabelas, e rótulo no botão Voltar" },
       { type: "fix", text: "Busca de dispositivos por IP encontra trechos no meio do endereço (ex: '168.1'), não apenas o início" },
       { type: "feat", text: "Badges da sidebar (dispositivos offline, links online) atualizam ao vivo a cada 30s, sem precisar recarregar a página" },
       { type: "security", text: "Criação em massa de dispositivos passa a criptografar a community SNMP em repouso, como os demais cadastros" },
-      { type: "refactor", text: "Qualidade interna: helpers de formatação e componentes de drawer deduplicados; cobertura de testes ampliada para 2FA, logout e autorização por papel (585 testes); dependências atualizadas" },
+      { type: "refactor", text: "Qualidade interna: helpers de formatação e componentes de drawer deduplicados; cobertura de testes ampliada para 2FA, logout e autorização por papel (586 testes); dependências atualizadas" },
     ],
   },
   {

@@ -156,7 +156,7 @@ export default function TestManualClient() {
           <div data-section id="overview">
             <SectionTitle id="overview">Visão geral</SectionTitle>
             <P>
-              O WatchIT Tower possui uma suite com <strong>585 testes</strong> em <strong>69 suítes</strong>{" "}
+              O WatchIT Tower possui uma suite com <strong>586 testes</strong> em <strong>69 suítes</strong>{" "}
               (run padrão) cobrindo API routes, worker de monitoramento, componentes React,
               bibliotecas utilitárias, segurança e fluxos de integração end-to-end.
             </P>

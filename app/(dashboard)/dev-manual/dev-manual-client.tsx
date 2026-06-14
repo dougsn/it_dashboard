@@ -433,12 +433,12 @@ export default async function UsersPage() {
                 {[
                   ["Device", "Configuração do dispositivo: IP, tipo, protocolos habilitados, credenciais AES-256-GCM, intervalo", "id"],
                   ["DeviceStatus", "Uma linha por device — resultado mais recente (upsert). Lida pelo dashboard em tempo real", "deviceId (único)"],
-                  ["StatusHistory", "Append-only de cada checagem. Base dos gráficos de histórico. Retida por N dias (SystemConfig)", "(deviceId, timestamp)"],
+                  ["StatusHistory", "Append-only de cada checagem. Base dos gráficos de histórico. Retida por N dias (SystemConfig)", "(deviceId, timestamp) + (timestamp)"],
                   ["User", "Credenciais (bcrypt) + TOTP. version = optimistic locking; passwordChangedAt invalida JWTs emitidos antes da troca de senha", "id, username"],
                   ["TokenBlacklist", "JWTs invalidados. Consultado no middleware a cada request autenticado", "jti"],
                   ["RateLimit", "Contadores de rate limiting persistidos. Usado pelo middleware de login", "(key, window)"],
                   ["Link", "Link WAN: config RouterOS, banda contratada (bps), tráfego ao vivo (atualizado pelo worker)", "id"],
-                  ["LinkEvent", "UP/DOWN por link. Fonte do gráfico de disponibilidade e cálculo de uptime%", "(linkId, timestamp)"],
+                  ["LinkEvent", "UP/DOWN por link. Fonte do gráfico de disponibilidade e cálculo de uptime%", "(linkId, timestamp) + (timestamp)"],
                   ["WorkerHeartbeat", "Singleton upsertado a cada 60s pelo worker. Lido por /api/health para detectar crash", "id (sempre 1)"],
                   ["AuditLog", "CREATE/UPDATE/DELETE com IP, usuário, entidade e payload JSON", "(entity, timestamp)"],
                   ["SystemConfig", "Configurações de retenção de dados e outras configs globais", "key"],
@@ -492,6 +492,14 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
             <Callout variant="info">As funções aceitam um cliente Prisma opcional (default = singleton
               global) para que os testes de integração (<Code>incident-detection.test.ts</Code>) rodem o SQL
               real contra o PostgreSQL de teste.</Callout>
+            <P><strong>Índice de suporte:</strong> consultas por período sobre a frota inteira filtram só
+              por <Code>timestamp</Code>, e o índice composto <Code>(deviceId, timestamp)</Code> não serve
+              (lidera pela id). Por isso <Code>StatusHistory</Code> e <Code>LinkEvent</Code> têm também um
+              índice standalone <Code>(timestamp)</Code> — sem ele, <Code>/api/health</Code>, sparklines,
+              timeline, incidents e o pruning fariam Seq Scan da tabela inteira.</P>
+            <P>As sparklines do <Code>/api/overview</Code> usam
+              <Code>ROW_NUMBER() OVER (PARTITION BY deviceId ORDER BY timestamp DESC)</Code> para trazer só
+              os 60 pontos mais recentes por device, em vez de puxar 6h e fatiar em JS.</P>
           </Sec>
 
           {/* ── API ──────────────────────────────────────────────────── */}
