@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { LayoutDashboard, Server, Network, LogOut, AlertCircle, FileText, RadioTower, Wifi, Router, Users, Settings, ClipboardList, History, ShieldCheck, BookOpen, Code2, FlaskConical } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LighthouseIcon } from "@/components/lighthouse-icon";
 
 interface SidebarCounts {
   devicesTotal: number;
@@ -26,27 +27,6 @@ function BrandMark() {
     >
       <LighthouseIcon size={18} />
     </div>
-  );
-}
-
-function LighthouseIcon({ size = 24, className = "" }: { size?: number; className?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      {/* Light rays */}
-      <line x1="12" y1="2" x2="12" y2="3.5" />
-      <line x1="8.5" y1="3" x2="9.8" y2="4.8" />
-      <line x1="15.5" y1="3" x2="14.2" y2="4.8" />
-      {/* Lantern globe */}
-      <circle cx="12" cy="7.5" r="2" />
-      {/* Lantern platform */}
-      <path d="M9.5 9.5h5" />
-      {/* Tower body (trapezoid) */}
-      <path d="M9.5 9.5L8 21h8l-1.5-11.5" />
-      {/* Base */}
-      <line x1="6.5" y1="21" x2="17.5" y2="21" />
-      {/* Arched door */}
-      <path d="M11 21v-2.5A1 1 0 0 1 13 18.5V21" />
-    </svg>
   );
 }
 
