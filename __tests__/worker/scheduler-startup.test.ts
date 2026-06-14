@@ -169,6 +169,24 @@ describe("startScheduler", () => {
     expect(mockDb.device.findMany).toHaveBeenCalledTimes(2);
   });
 
+  it("reconcile fetches new/changed devices in a single batched findMany (no N+1)", async () => {
+    const newDevice = makeDevice("99");
+    (mockDb.device.findMany as jest.Mock)
+      .mockResolvedValueOnce([])                  // initial load (no devices)
+      .mockResolvedValueOnce([{ id: "99", name: "Device 99", updatedAt: new Date("2026-01-02") }]) // reconcile lean select
+      .mockResolvedValueOnce([newDevice]);        // batched fetch of the new device
+
+    await startScheduler();
+    await jest.advanceTimersByTimeAsync(30_000);
+    await Promise.resolve();
+
+    // 3 findMany total: initial + lean snapshot + ONE batched fetch (not one per device)
+    expect(mockDb.device.findMany).toHaveBeenCalledTimes(3);
+    expect(mockDb.device.findUnique).not.toHaveBeenCalled();
+    const batchCall = (mockDb.device.findMany as jest.Mock).mock.calls[2][0];
+    expect(batchCall.where.id.in).toEqual(["99"]);
+  });
+
   it("schedules repeated checks using the device checkInterval", async () => {
     const device = makeDevice("1", { checkInterval: 30 }); // 30s interval
     (mockDb.device.findMany as jest.Mock).mockResolvedValue([device]);
