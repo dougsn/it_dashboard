@@ -157,6 +157,19 @@ export function Sidebar({
       .catch(() => {});
   }, []);
 
+  // Keep the sidebar badges live (SSR initialCounts would otherwise freeze).
+  useEffect(() => {
+    let active = true;
+    const refresh = () =>
+      fetch("/api/counts")
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (active && d) setCounts(d); })
+        .catch(() => {});
+    refresh();
+    const id = setInterval(refresh, 30_000);
+    return () => { active = false; clearInterval(id); };
+  }, []);
+
   return (
     <aside aria-label="Menu lateral" className="w-60 shrink-0 bg-card border-r border-border flex flex-col pt-4.5 px-3.5 pb-3.5">
       {/* Brand */}

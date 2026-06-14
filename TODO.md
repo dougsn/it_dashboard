@@ -135,7 +135,8 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 - [x] **Busca de IP usa `startsWith`** — trocado por `includes` (acha octeto do meio).
 - [x] **`countdown-badge.tsx` — `rafRef`** — renomeado para `intervalRef` (clareza).
 - [x] **`key={i}` instável em SSIDs** — omada/unifi usam `${ssid}-${band}-${i}`.
-- [ ] _Follow-up: badge offline da sidebar congela (só SSR) — exige endpoint leve de contagens ou polling._
+- [x] _Follow-up: badge da sidebar agora atualiza ao vivo — novo `GET /api/counts` (count queries) + polling
+      de 30s na sidebar. Teste em `counts.test.ts`. ✅_
 - [ ] _Follow-up: `DeviceStatus` guarda JSON de clientes/leases sem limite — capar lista antes de serializar
       (tem implicação na exibição do detalhe; decidir o teto)._
 
