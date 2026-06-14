@@ -109,8 +109,8 @@ describe("Input validation security", () => {
       body: JSON.stringify({ name: "A".repeat(10000), ip: "1.2.3.4", type: "OTHER" }),
     });
     const res = await devicesPOST(req);
-    // Documents current behaviour — no max length on name. If added, update to expect 400.
-    expect([201, 400]).toContain(res.status);
+    // deviceConfigSchema caps name at 100 chars — a 10k-char name must be rejected.
+    expect(res.status).toBe(400);
   });
 
   it("POST /api/devices rejects invalid type enum", async () => {
