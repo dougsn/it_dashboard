@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const body = await parseAndValidate(req, bulkDeviceSchema);
   if (!body.ok) return body.response;
 
-  const { ipStart, ipEnd, name, routerosUser, routerosPass, unifiApiKey, unifiUser, unifiPass, ...config } = body.data;
+  const { ipStart, ipEnd, name, snmpCommunity, routerosUser, routerosPass, unifiApiKey, unifiUser, unifiPass, ...config } = body.data;
 
   const startInt = ipToInt(ipStart);
   const endInt = ipToInt(ipEnd);
@@ -54,6 +54,8 @@ export async function POST(req: NextRequest) {
       ...config,
       ip,
       name: `${name} ${ip.split(".").pop()}`,
+      // SEC-031: encrypt SNMP community at rest (the plaintext column keeps its default)
+      snmpCommunityEnc: snmpCommunity ? encrypt(snmpCommunity) : null,
       routerosUserEnc: routerosUser ? encrypt(routerosUser) : null,
       routerosPassEnc: routerosPass ? encrypt(routerosPass) : null,
       unifiApiKeyEnc:  unifiApiKey  ? encrypt(unifiApiKey)  : null,
