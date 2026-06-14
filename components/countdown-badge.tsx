@@ -9,7 +9,7 @@ interface CountdownBadgeProps {
 
 export function CountdownBadge({ intervalMs, lastUpdated }: CountdownBadgeProps) {
   const [remaining, setRemaining] = useState<number | null>(null);
-  const rafRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     function tick() {
@@ -20,8 +20,8 @@ export function CountdownBadge({ intervalMs, lastUpdated }: CountdownBadgeProps)
     }
 
     tick();
-    rafRef.current = setInterval(tick, 1000);
-    return () => { if (rafRef.current) clearInterval(rafRef.current); };
+    intervalRef.current = setInterval(tick, 1000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [intervalMs, lastUpdated]);
 
   if (remaining === null) return null;

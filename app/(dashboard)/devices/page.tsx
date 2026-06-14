@@ -282,7 +282,7 @@ export default function DevicesPage() {
         (statusFilter === "OFFLINE" && !(d.currentStatus?.isOnline ?? false));
       const typeMatch = typeFilter === "ALL" || d.type === typeFilter;
       const locationMatch = locationFilter === "ALL" || d.location === locationFilter;
-      const searchMatch = !q || d.name.toLowerCase().includes(q) || d.ip.startsWith(q);
+      const searchMatch = !q || d.name.toLowerCase().includes(q) || d.ip.includes(q);
       return statusMatch && typeMatch && locationMatch && searchMatch;
     })
     .sort((a, b) => {

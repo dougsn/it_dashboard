@@ -125,11 +125,13 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 - [ ] _Follow-up (risco em form): `handleTestUnifi`/`handleTestOmada` (device-form-protocols vs bulk) → hook
       compartilhado. Adiado por tocar lógica de formulário em dois lugares._
 
-### Branch `refactor/misc`
-- [ ] **Busca de IP usa `startsWith`** — `devices/page.tsx:276` — trocar por `includes` (achar octeto do meio).
-- [ ] **Badge offline da sidebar congela** — só SSR inicial; atualizar via polling.
-- [ ] **`DeviceStatus` guarda JSON sem limite nem pruning** — limitar lista de clientes/leases; podar tabela.
-- [ ] **`countdown-badge.tsx` — `rafRef` guarda `setInterval`** — renomear (clareza).
+### Branch `refactor/misc` ✅ CONCLUÍDA (parcial — ver follow-ups)
+- [x] **Busca de IP usa `startsWith`** — trocado por `includes` (acha octeto do meio).
+- [x] **`countdown-badge.tsx` — `rafRef`** — renomeado para `intervalRef` (clareza).
+- [x] **`key={i}` instável em SSIDs** — omada/unifi usam `${ssid}-${band}-${i}`.
+- [ ] _Follow-up: badge offline da sidebar congela (só SSR) — exige endpoint leve de contagens ou polling._
+- [ ] _Follow-up: `DeviceStatus` guarda JSON de clientes/leases sem limite — capar lista antes de serializar
+      (tem implicação na exibição do detalhe; decidir o teto)._
 
 ### Branch `test/coverage-gaps` ✅ CONCLUÍDA (parcial — ver follow-up)
 - [x] **Testes para `/api/users/[id]/totp`** — `users-totp.test.ts` (GET/POST/DELETE: admin+self, 403, 404,
