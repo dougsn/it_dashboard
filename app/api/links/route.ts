@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { z } from "zod";
-import { requireAuth, requireRole } from "@/lib/with-auth";
+import { requireRole, getSessionRole } from "@/lib/with-auth";
 import { generateWebhookToken } from "@/lib/webhook";
 import { parseAndValidate } from "@/lib/parse-body";
 import { writeAudit } from "@/lib/audit";
@@ -19,8 +19,12 @@ const createSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const unauth = await requireAuth();
-  if (unauth) return unauth;
+  // SEC-028: webhook tokens grant unauthenticated link state control — only
+  // expose them to OPERADOR+. VIEWER gets the link list without tokens.
+  const role = await getSessionRole();
+  if (!role) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const canSeeTokens = role === "OPERADOR" || role === "ADMIN";
+
   const { searchParams } = new URL(req.url);
   const rawPage  = searchParams.get("page");
   const rawLimit = searchParams.get("limit");
@@ -28,7 +32,9 @@ export async function GET(req: NextRequest) {
   const orderBy = { createdAt: "desc" as const };
   const include = { _count: { select: { events: true } } };
   const addTokens = (links: Awaited<ReturnType<typeof db.link.findMany>>) =>
-    links.map((link) => ({ ...link, webhookToken: generateWebhookToken(link.id) }));
+    canSeeTokens
+      ? links.map((link) => ({ ...link, webhookToken: generateWebhookToken(link.id) }))
+      : links;
 
   const paginate = rawPage !== null || rawLimit !== null;
   const limit = Math.min(Math.max(parseInt(rawLimit ?? "50", 10) || 50, 1), 200);

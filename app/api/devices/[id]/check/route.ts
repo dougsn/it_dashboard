@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/with-auth";
+import { requireRole } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { runChecks } from "@/worker/scheduler";
 
@@ -7,7 +7,8 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const unauth = await requireAuth();
+  // SEC-029: force-check triggers active network operations — restrict to OPERADOR+
+  const unauth = await requireRole("OPERADOR");
   if (unauth) return unauth;
 
   const { id } = await params;

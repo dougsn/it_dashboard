@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/with-auth";
+import { requireRole } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { runChecks } from "@/worker/scheduler";
 import { z } from "zod";
@@ -7,7 +7,8 @@ import { z } from "zod";
 const deviceTypeSchema = z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER", "UNIFI_AP", "OMADA_AP"]);
 
 export async function POST(req: NextRequest) {
-  const unauth = await requireAuth();
+  // SEC-029: force-check triggers active network operations — restrict to OPERADOR+
+  const unauth = await requireRole("OPERADOR");
   if (unauth) return unauth;
 
   const { searchParams } = new URL(req.url);

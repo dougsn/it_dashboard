@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/with-auth";
+import { requireRole } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 import { resolveRouterosCredentials } from "@/lib/crypto";
 import { checkLinkTraffic } from "@/worker/monitors/link-traffic";
@@ -8,7 +8,8 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const unauth = await requireAuth();
+  // SEC-029: decrypts RouterOS credentials and hits the device — restrict to OPERADOR+
+  const unauth = await requireRole("OPERADOR");
   if (unauth) return unauth;
   const { id } = await params;
   const link = await db.link.findUnique({
