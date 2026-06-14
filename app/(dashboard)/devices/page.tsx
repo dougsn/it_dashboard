@@ -154,7 +154,7 @@ function SortableHeader({
 }) {
   const active = sortField === field;
   return (
-    <th className={className}>
+    <th className={className} aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
       <button
         onClick={() => onSort(field)}
         className={`inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide transition-colors select-none ${
@@ -162,7 +162,10 @@ function SortableHeader({
         }`}
       >
         {label}
-        <span className="shrink-0">
+        <span className="sr-only">
+          {active ? `, ordenado ${sortDir === "asc" ? "crescente" : "decrescente"}` : ", clique para ordenar"}
+        </span>
+        <span className="shrink-0" aria-hidden="true">
           {active ? (
             sortDir === "asc" ? (
               <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />

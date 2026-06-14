@@ -13,6 +13,7 @@ export function FilterChip({ active, onClick, children, color = "default" }: {
   return (
     <button
       onClick={onClick}
+      aria-pressed={active}
       className={`inline-flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-medium border transition-all select-none whitespace-nowrap ${
         active
           ? activeClass

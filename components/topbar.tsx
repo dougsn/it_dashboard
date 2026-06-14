@@ -46,12 +46,13 @@ export function Topbar({
         {back && (
           <Link
             href={back}
+            aria-label={backLabel ?? "Voltar"}
             className={cn(
               "flex items-center gap-1 rounded-lg border border-border hover:bg-muted transition-colors shrink-0 text-muted-foreground hover:text-foreground",
               backLabel ? "px-2 h-7 text-[11.5px] font-medium" : "justify-center w-7 h-7"
             )}
           >
-            <ChevronLeft className="h-4 w-4 shrink-0" />
+            <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
             {backLabel && <span>{backLabel}</span>}
           </Link>
         )}

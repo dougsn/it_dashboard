@@ -122,7 +122,7 @@ function APCard({ device }: { device: UnifiDevice }) {
           sortKey === col ? "text-foreground font-semibold" : "text-muted-foreground"
         }`}
       >
-        {label}<ArrowUpDown className="h-3 w-3" />
+        {label}<ArrowUpDown className="h-3 w-3" aria-hidden="true" />
       </button>
     );
   }
@@ -220,6 +220,7 @@ function APCard({ device }: { device: UnifiDevice }) {
         <div className="border-b">
           <button
             onClick={() => setSsidsOpen(v => !v)}
+            aria-expanded={ssidsOpen}
             className="w-full flex items-center justify-between px-5 py-2.5 text-xs font-semibold hover:bg-muted/30 transition-colors"
           >
             <span className="flex items-center gap-1.5">
@@ -269,6 +270,7 @@ function APCard({ device }: { device: UnifiDevice }) {
         <div>
           <button
             onClick={() => setClientsOpen(v => !v)}
+            aria-expanded={clientsOpen}
             className="w-full flex items-center justify-between px-5 py-2.5 text-xs font-semibold hover:bg-muted/30 transition-colors"
           >
             <span className="flex items-center gap-1.5">

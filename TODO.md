@@ -107,13 +107,14 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 
 ## 🔵 P3 — Baixo impacto, acessibilidade e melhorias
 
-### Branch `fix/a11y-round4`
-- [ ] **Cards/linhas clicáveis sem teclado/ARIA** — `<div onClick>` em `page.tsx` (ProblemRow, DeviceOverviewCard),
-      `incidents/page.tsx` — usar `<button>` ou `role/tabIndex/onKeyDown`.
-- [ ] **Faltam estados ARIA** — `aria-pressed` (FilterChip, botões de janela), `aria-expanded` (seções colapsáveis),
-      `aria-sort` (cabeçalhos ordenáveis), `aria-label` no botão voltar do Topbar sem `backLabel`.
-- [ ] **Validar CSP nonce em build de produção** — `middleware.ts` gera nonce mas não aparece no código de app;
-      o Next.js aplica automaticamente quando está no header CSP — confirmar que scripts carregam em `NODE_ENV=production`.
+### Branch `fix/a11y-round4` ✅ CONCLUÍDA
+- [x] **Cards/linhas clicáveis sem teclado/ARIA** — ProblemRow, DeviceOverviewCard e linhas de incidente
+      agora têm `role="button"`, `tabIndex={0}`, `onKeyDown` (Enter/Espaço) e foco visível.
+- [x] **Faltam estados ARIA** — `aria-pressed` (FilterChip, janelas de incidents), `aria-expanded`
+      (clientes/DHCP/histórico em devices/[id]; SSIDs/clientes em unifi), `aria-sort` + texto sr-only
+      (SortableHeader de devices), `aria-label="Voltar"` no Topbar; ícones de sort marcados decorativos.
+- [x] **CSP nonce validado** — build de produção (`npm run build`) OK; o Next.js injeta o nonce nos
+      próprios scripts a partir do header CSP do middleware. Não é bug de produção.
 
 ### Branch `refactor/dedup`
 - [ ] **`formatBytes`/`formatBps` duplicados** (3 arquivos) → consolidar em `lib/format.ts`.

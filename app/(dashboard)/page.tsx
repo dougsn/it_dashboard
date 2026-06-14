@@ -161,7 +161,10 @@ function ProblemRow({ device, offlineAt, sparkline, onClick }: {
 
   return (
     <div onClick={onClick}
-      className="flex items-start gap-3 px-5 py-3.5 hover:bg-muted/20 transition-colors cursor-pointer border-b border-border/50 last:border-0">
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } }}
+      className="flex items-start gap-3 px-5 py-3.5 hover:bg-muted/20 transition-colors cursor-pointer border-b border-border/50 last:border-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
       <div className="mt-1.5 shrink-0">
         <span className={`block w-2.5 h-2.5 rounded-full ${dotColor}`} />
       </div>
@@ -225,7 +228,12 @@ function DeviceOverviewCard({ device, sparkline, onClick }: { device: DeviceWith
 
 
   return (
-    <div onClick={onClick} className="cursor-pointer">
+    <div onClick={onClick}
+      role="button"
+      tabIndex={0}
+      aria-label={`Detalhes de ${device.name}`}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } }}
+      className="cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
       <Card className={`bg-card border shadow-none hover:shadow-md transition-all hover:-translate-y-0.5 h-full overflow-hidden border-l-4 ${
         isInstavel ? "border-l-warning" : isOnline ? "border-l-success" : "border-l-destructive"
       }`}>

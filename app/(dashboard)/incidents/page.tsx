@@ -138,6 +138,7 @@ export default function IncidentsPage() {
               <button
                 key={w.value}
                 onClick={() => setWindow(w.value)}
+                aria-pressed={window === w.value}
                 className={`px-3 h-7 rounded-full text-xs font-medium border transition-all ${
                   window === w.value
                     ? "bg-primary text-primary-foreground border-primary"
@@ -194,7 +195,11 @@ export default function IncidentsPage() {
                       <div
                         key={inc.id}
                         onClick={() => setDrawerDeviceId(inc.deviceId)}
-                        className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer group"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Incidente de ${inc.deviceName}`}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDrawerDeviceId(inc.deviceId); } }}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         {/* Status indicator */}
                         <div

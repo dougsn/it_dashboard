@@ -252,7 +252,7 @@ export default function DeviceDetailPage({
         }`}
       >
         {label}
-        <ArrowUpDown className="h-3 w-3" />
+        <ArrowUpDown className="h-3 w-3" aria-hidden="true" />
       </button>
     );
   }
@@ -570,6 +570,7 @@ export default function DeviceDetailPage({
           <div className="space-y-3">
             <button
               onClick={() => setClientsExpanded((v) => !v)}
+              aria-expanded={clientsExpanded}
               className="w-full flex items-center justify-between font-semibold hover:text-foreground/80 transition-colors"
             >
               <span className="flex items-center gap-2">
@@ -665,6 +666,7 @@ export default function DeviceDetailPage({
           <div className="space-y-3">
             <button
               onClick={() => setDhcpExpanded((v) => !v)}
+              aria-expanded={dhcpExpanded}
               className="w-full flex items-center justify-between font-semibold hover:text-foreground/80 transition-colors"
             >
               <span className="flex items-center gap-2">
@@ -754,6 +756,7 @@ export default function DeviceDetailPage({
             {reversedHistory.length > 20 && (
               <button
                 onClick={() => setHistoryExpanded((v) => !v)}
+                aria-expanded={historyExpanded}
                 className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mx-auto"
               >
                 {historyExpanded ? (
