@@ -31,11 +31,19 @@ export async function GET(_req: Request) {
   const since6h  = new Date(now - 6  * 3_600_000);
 
   const [pingHistory, links, linkEvents, lastEventsBefore] = await Promise.all([
-    db.statusHistory.findMany({
-      where: { timestamp: { gte: since6h } },
-      orderBy: { timestamp: "asc" },
-      select: { deviceId: true, pingMs: true, isOnline: true },
-    }),
+    // Sparklines only need the last 60 samples per device — fetch exactly those
+    // (windowed) instead of pulling 6h of history for every device and slicing in JS.
+    db.$queryRaw<{ deviceId: string; pingMs: number | null; isOnline: boolean }[]>`
+      SELECT "deviceId", "pingMs", "isOnline"
+      FROM (
+        SELECT "deviceId", "pingMs", "isOnline", "timestamp",
+          ROW_NUMBER() OVER (PARTITION BY "deviceId" ORDER BY "timestamp" DESC) AS rn
+        FROM "StatusHistory"
+        WHERE "timestamp" >= ${since6h}
+      ) ranked
+      WHERE rn <= 60
+      ORDER BY "deviceId", "timestamp" ASC
+    `,
     db.link.findMany({ select: { id: true, isOnline: true } }),
     db.linkEvent.findMany({
       where: { timestamp: { gte: since24h } },

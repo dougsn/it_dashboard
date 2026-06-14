@@ -10,7 +10,7 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/db", () => ({
   db: {
-    statusHistory: { findMany: jest.fn() },
+    $queryRaw: jest.fn(),
     link: { findMany: jest.fn() },
     linkEvent: { findMany: jest.fn() },
   },
@@ -20,7 +20,11 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>;
-const mockDb = db as jest.Mocked<typeof db>;
+const mockDb = db as unknown as {
+  $queryRaw: jest.Mock;
+  link: { findMany: jest.Mock };
+  linkEvent: { findMany: jest.Mock };
+};
 
 const FAKE_SESSION = { user: { id: "user-1", name: "admin", role: "ADMIN" }, expires: "2099-01-01" };
 
@@ -29,7 +33,7 @@ function makeReq() {
 }
 
 function emptyDb() {
-  (mockDb.statusHistory.findMany as jest.Mock).mockResolvedValue([]);
+  (mockDb.$queryRaw as jest.Mock).mockResolvedValue([]);
   (mockDb.link.findMany as jest.Mock).mockResolvedValue([]);
   (mockDb.linkEvent.findMany as jest.Mock).mockResolvedValue([]);
 }
@@ -59,7 +63,7 @@ describe("GET /api/overview", () => {
 
   it("builds sparklines with null for offline checks", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
-    (mockDb.statusHistory.findMany as jest.Mock).mockResolvedValue([
+    (mockDb.$queryRaw as jest.Mock).mockResolvedValue([
       { deviceId: "d1", isOnline: true,  pingMs: 10 },
       { deviceId: "d1", isOnline: false, pingMs: null },
       { deviceId: "d1", isOnline: true,  pingMs: 20 },
@@ -79,7 +83,7 @@ describe("GET /api/overview", () => {
       isOnline: true,
       pingMs: i + 1,
     }));
-    (mockDb.statusHistory.findMany as jest.Mock).mockResolvedValue(history);
+    (mockDb.$queryRaw as jest.Mock).mockResolvedValue(history);
     (mockDb.link.findMany as jest.Mock).mockResolvedValue([]);
     (mockDb.linkEvent.findMany as jest.Mock).mockResolvedValue([]);
 
@@ -93,7 +97,7 @@ describe("GET /api/overview", () => {
 
   it("produces 24 segments per link", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
-    (mockDb.statusHistory.findMany as jest.Mock).mockResolvedValue([]);
+    (mockDb.$queryRaw as jest.Mock).mockResolvedValue([]);
     (mockDb.link.findMany as jest.Mock).mockResolvedValue([{ id: "link-1", isOnline: true }]);
     (mockDb.linkEvent.findMany as jest.Mock).mockResolvedValue([]);
 
@@ -104,7 +108,7 @@ describe("GET /api/overview", () => {
 
   it("fills segments with 'online' when link.isOnline=true and no events", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
-    (mockDb.statusHistory.findMany as jest.Mock).mockResolvedValue([]);
+    (mockDb.$queryRaw as jest.Mock).mockResolvedValue([]);
     (mockDb.link.findMany as jest.Mock).mockResolvedValue([{ id: "link-1", isOnline: true }]);
     (mockDb.linkEvent.findMany as jest.Mock).mockResolvedValue([]);
 
@@ -115,7 +119,7 @@ describe("GET /api/overview", () => {
 
   it("fills segments with 'offline' when link.isOnline=false and no events", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
-    (mockDb.statusHistory.findMany as jest.Mock).mockResolvedValue([]);
+    (mockDb.$queryRaw as jest.Mock).mockResolvedValue([]);
     (mockDb.link.findMany as jest.Mock).mockResolvedValue([{ id: "link-1", isOnline: false }]);
     (mockDb.linkEvent.findMany as jest.Mock).mockResolvedValue([]);
 
@@ -126,7 +130,7 @@ describe("GET /api/overview", () => {
 
   it("marks a segment as 'degraded' when it has DOWN then UP events", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
-    (mockDb.statusHistory.findMany as jest.Mock).mockResolvedValue([]);
+    (mockDb.$queryRaw as jest.Mock).mockResolvedValue([]);
     (mockDb.link.findMany as jest.Mock).mockResolvedValue([{ id: "link-1", isOnline: true }]);
 
     const now = Date.now();
@@ -147,7 +151,7 @@ describe("GET /api/overview", () => {
 
   it("marks a segment as 'offline' when it ends with a DOWN event", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
-    (mockDb.statusHistory.findMany as jest.Mock).mockResolvedValue([]);
+    (mockDb.$queryRaw as jest.Mock).mockResolvedValue([]);
     (mockDb.link.findMany as jest.Mock).mockResolvedValue([{ id: "link-1", isOnline: false }]);
 
     const now = Date.now();
@@ -165,7 +169,7 @@ describe("GET /api/overview", () => {
 
   it("handles multiple links independently without cross-contamination", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
-    (mockDb.statusHistory.findMany as jest.Mock).mockResolvedValue([]);
+    (mockDb.$queryRaw as jest.Mock).mockResolvedValue([]);
     (mockDb.link.findMany as jest.Mock).mockResolvedValue([
       { id: "link-A", isOnline: true  },
       { id: "link-B", isOnline: false },
