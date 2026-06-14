@@ -6,6 +6,9 @@ export function sanitizeDevice(device: Device) {
     routerosUserEnc, routerosPassEnc,
     unifiApiKeyEnc, unifiUserEnc, unifiPassEnc,
     omadaClientIdEnc, omadaClientSecretEnc,
+    // SEC-031: never expose SNMP community — neither the encrypted blob nor the
+    // legacy plaintext column (older rows still hold a real community there)
+    snmpCommunity, snmpCommunityEnc,
     ...rest
   } = device;
   return {
@@ -14,5 +17,6 @@ export function sanitizeDevice(device: Device) {
     hasUnifiApiKey:          !!(resolveUnifiApiKey({ unifiApiKeyEnc })),
     hasUnifiCredentials:     !!(resolveUnifiCredentials({ unifiUserEnc, unifiPassEnc })),
     hasOmadaCredentials:     !!(resolveOmadaCredentials({ omadaClientIdEnc, omadaClientSecretEnc })),
+    hasSnmpCredentials:      !!snmpCommunityEnc || (snmpCommunity != null && snmpCommunity !== "public"),
   };
 }

@@ -14,9 +14,14 @@ interface AuditEntry {
 }
 
 export function extractIp(req: Request): string | null {
-  const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
-  return req.headers.get("x-real-ip") ?? null;
+  // X-Forwarded-For / X-Real-IP are client-spoofable unless a trusted reverse
+  // proxy sets them. Only honor them when TRUST_PROXY is explicitly enabled.
+  if (process.env.TRUST_PROXY === "true") {
+    const fwd = req.headers.get("x-forwarded-for");
+    if (fwd) return fwd.split(",")[0].trim();
+    return req.headers.get("x-real-ip") ?? null;
+  }
+  return null;
 }
 
 export async function writeAudit(entry: AuditEntry): Promise<void> {

@@ -1,6 +1,6 @@
 # Relatório de Segurança — WatchIT Tower
 
-**Última atualização:** 2026-06-14 (v0.2.0 — SEC-028/SEC-029 resolvidos; SEC-021 completado com revalidação por troca de senha)  
+**Última atualização:** 2026-06-14 (v0.2.0 — SEC-028/029/031/033/036 resolvidos; SEC-021 completado com revalidação por troca de senha)  
 **Versão do sistema:** 0.2.0  
 **Analista:** Análise automatizada via Claude Code  
 **Escopo:** Código-fonte completo — Next.js 14 (frontend/API), worker de monitoramento, banco PostgreSQL
@@ -15,10 +15,10 @@ O WatchIT Tower é uma aplicação interna para monitoramento de equipamentos de
 |-----------|-------|-----------|--------|
 | 🔴 Crítico  | 1     | 1         | 0      |
 | 🟠 Alto     | 4     | 4         | 0      |
-| 🟡 Médio    | 5     | 4         | 1      |
-| 🔵 Baixo    | 3     | 1         | 2      |
+| 🟡 Médio    | 6     | 5         | 1      |
+| 🔵 Baixo    | 5     | 3         | 2      |
 | ℹ️ Info     | 16    | 12 + 4⚠️  | 0      |
-| **Total**  | **29**| **26**    | **3**  |
+| **Total**  | **32**| **29**    | **3**  |
 
 > ⚠️ = Aceito / won't-fix por design intencional ou limitação de framework
 
@@ -294,6 +294,34 @@ Campo `version Int @default(1)` no modelo `User`. `PUT /api/users/[id]` retorna 
 **Resolvido em:** branch `fix/viewer-authorization`
 
 Quatro endpoints exigiam apenas `requireAuth()`: `POST /api/devices/check` (dispara `runChecks` em toda a frota), `POST /api/devices/:id/check`, `POST /api/links/test-traffic` e `GET /api/links/:id/live-traffic` (ambos decriptam credenciais RouterOS e fazem chamada real ao Mikrotik). Um VIEWER podia gerar carga de rede e usar os checks como ferramenta de reconhecimento. **Correção:** os quatro agora exigem `requireRole("OPERADOR")`. Coberto por `__tests__/security/viewer-authorization.test.ts`.
+
+---
+
+### SEC-031 — Community SNMP legada exposta em texto claro nas respostas de dispositivo
+**Severidade:** 🟡 MÉDIO — ✅ RESOLVIDO
+**Categoria:** Exposição de dados sensíveis (OWASP A02)
+**Resolvido em:** branch `fix/credential-exposure`
+
+`sanitizeDevice()` removia os campos `*Enc` mas deixava passar o campo legado `snmpCommunity` (texto claro) no `...rest`, retornando-o a todos os usuários autenticados (incluindo VIEWER). Para dispositivos criados antes da migração para colunas criptografadas, a community SNMP real ficava exposta. **Correção:** `sanitizeDevice()` agora remove `snmpCommunity` e `snmpCommunityEnc`, expondo `hasSnmpCredentials: boolean`. O campo virou write-only no form (em branco no edit, só atualiza se preenchido). Coberto por `__tests__/api/devices.test.ts`.
+_Nota: o `POST /api/devices/bulk` ainda grava a community em texto claro na coluna `snmpCommunity` (criptografia-em-repouso não aplicada no bulk) — registrado no TODO como follow-up._
+
+---
+
+### SEC-033 — Mensagem de erro interno do PostgreSQL exposta em /api/admin/stats
+**Severidade:** 🔵 BAIXO — ✅ RESOLVIDO
+**Categoria:** Exposição de informação (OWASP A05)
+**Resolvido em:** branch `fix/credential-exposure`
+
+O handler de erro retornava `err.message` diretamente ao cliente, vazando estrutura interna (nomes de tabelas, detalhes do driver). Embora restrito a ADMIN, é defesa em profundidade. **Correção:** erro completo logado no servidor; cliente recebe mensagem genérica.
+
+---
+
+### SEC-036 — `X-Forwarded-For` confiado sem proxy reverso (spoofing de IP em auditoria)
+**Severidade:** 🔵 BAIXO — ✅ RESOLVIDO
+**Categoria:** Integridade de logs (OWASP A09)
+**Resolvido em:** branch `fix/credential-exposure`
+
+`extractIp()` confiava cegamente em `X-Forwarded-For`/`X-Real-IP`, permitindo que um cliente em acesso direto forjasse o IP registrado nos logs de auditoria. **Correção:** os headers só são honrados quando `TRUST_PROXY=true` (definido apenas atrás de um proxy reverso confiável que sanitiza os headers); caso contrário retorna `null`. Documentado em `.env.example`.
 
 ---
 

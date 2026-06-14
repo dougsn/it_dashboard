@@ -47,7 +47,9 @@ export const deviceConfigSchema = z.object({
     .refine(p => !p.includes(".."), "O caminho não pode conter ..")
     .default("/"),
   snmpEnabled: z.boolean().default(false),
-  snmpCommunity: z.string().default("public"),
+  // Write-only credential: omitted on edit means "keep stored value". Encrypted to
+  // snmpCommunityEnc on create/update; resolveSnmpCommunity falls back to "public".
+  snmpCommunity: z.string().optional(),
   snmpPort: z.number().int().min(1).max(65535).default(161),
   routerosEnabled: z.boolean().default(false),
   routerosUser: z.string().optional().nullable(), // input only — never persisted, always encrypted to routerosUserEnc

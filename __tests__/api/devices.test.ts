@@ -90,6 +90,19 @@ describe("GET /api/devices", () => {
     expect(data[0].name).toBe("Router Principal");
   });
 
+  it("SEC-031: strips snmpCommunity and exposes hasSnmpCredentials", async () => {
+    mockAuth.mockResolvedValue(FAKE_SESSION as never);
+    (mockDb.device.findMany as jest.Mock).mockResolvedValue([
+      { ...FAKE_DEVICE, snmpCommunity: "s3cr3t-community", snmpCommunityEnc: null },
+    ]);
+
+    const res = await GET(new NextRequest("http://localhost/api/devices"));
+    const data = await res.json();
+    expect(data[0]).not.toHaveProperty("snmpCommunity");
+    expect(data[0]).not.toHaveProperty("snmpCommunityEnc");
+    expect(data[0].hasSnmpCredentials).toBe(true);
+  });
+
   it("includes currentStatus in result", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
     (mockDb.device.findMany as jest.Mock).mockResolvedValue([
