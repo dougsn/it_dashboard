@@ -145,11 +145,11 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 - [ ] _Follow-up: caminho de alerta do scheduler (`safeRun`: claim atômico, cooldown, `sendAlert`) —
       exige fake timers + mock de `@/worker/monitors/alert`._
 
-### Branch `chore/deps`
-- [ ] **`next-auth` em beta não pinada** — `package.json` `"^5.0.0-beta.31"` → pin exato (item SEC-025 original).
-- [ ] **Patches menores** — `next 16.2.7→16.2.9`, `react 19.2.4→19.2.7`, `react-hook-form 7.77→7.79`, `lucide-react`, `tailwindcss`.
-- [ ] **`npm audit`** — 7 vulnerabilidades (postcss via next, XSS no stringify, impacto baixo). NÃO usar
-      `audit fix --force` (faz downgrade do Next); aguardar patch upstream do Next.
+### Branch `chore/deps` ✅ CONCLUÍDA
+- [x] **`next-auth` em beta não pinada** — pin exato `"5.0.0-beta.31"` (remove `^`).
+- [x] **Patches menores** — `next 16.2.9`, `react/react-dom 19.2.7`, `react-hook-form ^7.79.0`. Build + 580 testes OK.
+- [x] **`npm audit`** — 7 vulnerabilidades (postcss via next, XSS no stringify, impacto baixo) permanecem;
+      o bump não as resolve e `audit fix --force` faria downgrade do Next. Aguardar patch upstream.
 
 ---
 
