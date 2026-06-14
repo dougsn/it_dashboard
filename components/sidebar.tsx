@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Server, Network, LogOut, AlertCircle, FileText, RadioTower, Wifi, Router, Users, Settings, ClipboardList, History, ShieldCheck, BookOpen } from "lucide-react";
+import { LayoutDashboard, Server, Network, LogOut, AlertCircle, FileText, RadioTower, Wifi, Router, Users, Settings, ClipboardList, History, ShieldCheck, BookOpen, Code2 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 interface SidebarCounts {
@@ -281,6 +281,12 @@ export function Sidebar({
               label="Logs de Alterações"
               icon={ClipboardList}
               active={pathname.startsWith("/audit")}
+            />
+            <NavItem
+              href="/dev-manual"
+              label="Manual Dev"
+              icon={Code2}
+              active={pathname.startsWith("/dev-manual")}
             />
           </>
         )}
