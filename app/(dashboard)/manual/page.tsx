@@ -421,7 +421,9 @@ export default function ManualPage() {
               <P>
                 A página inicial (<strong>/</strong>) é o painel central de monitoramento.
                 Ela consolida o estado de toda a infraestrutura em uma única tela,
-                atualizando a cada 30 segundos automaticamente.
+                atualizando a cada 30 segundos automaticamente. Os badges do menu lateral
+                (dispositivos offline e links online) também se atualizam sozinhos a cada
+                30 segundos, sem precisar recarregar a página.
               </P>
 
               <H2 id="kpis">KPIs e indicadores</H2>

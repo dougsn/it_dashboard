@@ -156,7 +156,7 @@ export default function TestManualClient() {
           <div data-section id="overview">
             <SectionTitle id="overview">Visão geral</SectionTitle>
             <P>
-              O WatchIT Tower possui uma suite com <strong>580 testes</strong> em <strong>67 suítes</strong>{" "}
+              O WatchIT Tower possui uma suite com <strong>585 testes</strong> em <strong>69 suítes</strong>{" "}
               (run padrão) cobrindo API routes, worker de monitoramento, componentes React,
               bibliotecas utilitárias, segurança e fluxos de integração end-to-end.
             </P>
@@ -169,12 +169,12 @@ export default function TestManualClient() {
             <Table
               headers={["Camada", "Arquivos", "Ambiente", "Banco"]}
               rows={[
-                ["API Routes",     "32 arquivos",  "node",   "Mock (jest-mock-extended)"],
-                ["Worker Monitors","11 arquivos",  "node",   "Mock"],
+                ["API Routes",     "33 arquivos",  "node",   "Mock (jest-mock-extended)"],
+                ["Worker Monitors","12 arquivos",  "node",   "Mock"],
                 ["Componentes",    "17 arquivos",  "jsdom",  "–"],
                 ["Bibliotecas",    "5 arquivos",   "node",   "–"],
                 ["Segurança",      "3 arquivos",   "node",   "Mock"],
-                ["Integração",     "3 arquivos",   "node",   "PostgreSQL real (Docker)"],
+                ["Integração",     "4 arquivos",   "node",   "PostgreSQL real (Docker)"],
                 ["Carga",          "1 arquivo",    "node",   "PostgreSQL real (Docker)"],
               ]}
             />
@@ -307,6 +307,7 @@ NEXTAUTH_SECRET=<min 32 chars>`}
                 ["admin-stats.test.ts",       "GET /api/admin/stats — métricas do banco"],
                 ["metrics.test.ts",           "GET /api/metrics — CPU, memória do processo Node"],
                 ["version.test.ts",           "GET /api/version — build number via git"],
+                ["counts.test.ts",            "GET /api/counts — contagens leves de dispositivos/links para a sidebar (offline = total − online)"],
                 ["auth-rate-check.test.ts",   "GET /api/auth/rate-check — estado do rate limiter por IP"],
                 ["test-unifi.test.ts",        "POST /api/devices/test-unifi — SSRF prevention"],
               ]}
@@ -335,6 +336,7 @@ NEXTAUTH_SECRET=<min 32 chars>`}
                 ["alert.test.ts",             "dispatchAlert — webhook POST, cooldown, HMAC header"],
                 ["scheduler.test.ts",         "startScheduler/shutdown — drain de pendingChecks, idempotência"],
                 ["scheduler-startup.test.ts", "fail-fast: ENCRYPTION_KEY e WEBHOOK_SECRET ausentes aborta worker"],
+                ["scheduler-alert.test.ts",   "caminho de alerta: claim atômico (updateMany), cooldown, sem re-alerta após threshold"],
               ]}
             />
 
@@ -487,6 +489,7 @@ it("GET /api/devices returns 401 without session", async () => {
                 ["devices-crud.test.ts", "CRUD completo de Device no banco real — create, read, update, delete, filtros"],
                 ["webhook-flow.test.ts", "Fluxo UP/DOWN de link: cria link no banco, dispara webhook, verifica LinkEvent gravado"],
                 ["webhook-e2e.test.ts",  "Versão expandida do webhook com múltiplos eventos e verificação de estado final"],
+                ["incident-detection.test.ts", "Valida as queries SQL com window function (LAG) — colapso de transições de incidente/latência e agregações de relatório (FILTER/stride) contra PostgreSQL real"],
               ]}
             />
 
