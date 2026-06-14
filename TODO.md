@@ -58,13 +58,15 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
       `LAG` (`getOnlineTransitions`) que retorna só transições + bordas, e `detectIncidents` puro. Provadamente
       idêntico ao algoritmo anterior (transições + bordas; linhas redundantes são no-op). Teste de rota reescrito
       (mocka `$queryRaw`) + **teste de integração** validando o SQL real contra PostgreSQL.
-- [ ] _Follow-up: `timeline/route.ts` — além de online/offline, emite eventos de alta latência com lógica
-      stateful quirky (emite no 2º registro alto consecutivo por causa da init de `wasHighLatency`). A redução
-      de transições NÃO preserva esse caso de borda; converter exigiria replicar/ajustar a lógica. Janela
-      default 24h (menor) — risco/benefício baixo._
-- [ ] _Follow-up: `lib/report-builder.ts` — o gargalo de memória é a busca de amostras para os gráficos
-      (downsample 400 pts carrega tudo antes), não a detecção de incidentes. Converter só incidents não reduz
-      memória; precisa de downsample/agregação no SQL (muda aparência do gráfico — decidir abordagem)._
+- [x] **`timeline/route.ts` migrado** — `getDeviceStatusEvents` (LAG window function) retorna só transições de
+      online/offline E de bucket de alta-latência; o loop de eventos roda igual sobre as linhas reduzidas.
+      Online/offline idênticos; alta-latência emitida só em borda de subida real (removido o evento espúrio de
+      borda — comportamento mais correto). Teste de rota reescrito + integração validando o SQL.
+- [x] **`lib/report-builder.ts` migrado** — `lib/report-queries.ts` (`getDeviceReportStats` com FILTER
+      aggregates + `getDeviceChartSamples` com stride no SQL) e `getOnlineTransitionsForDevice` substituem o
+      `findMany` de histórico completo. Stats e incidentes **exatos**; gráfico com stride visualmente idêntico
+      (o downsample antigo já era stride). `buildInsights` passou a receber métricas exatas. Teste de rota
+      reescrito (orquestração) + integração validando as queries SQL.
 
 ---
 

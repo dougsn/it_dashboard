@@ -207,6 +207,6 @@ Todos os 17+ endpoints principais estão documentados incluindo: `/api/admin/aud
 Ver `TODO.md` para o roadmap priorizado completo. **P0–P3 concluídos** nesta auditoria. Pendências restantes:
 
 1. **Infra (alta prioridade):** Configurar reverse proxy com TLS (Caddy, nginx) para produção — SEC-005
-2. **Perf (parcial):** `incidents/route.ts` já migrado para query SQL com window function (`lib/incident-detection.ts`, validado por teste de integração). Faltam `timeline` (lógica stateful de alta latência) e `report-builder` (gargalo é o downsample dos gráficos, não os incidentes) — ver TODO.md
+2. **Perf (concluído):** `incidents`, `timeline` e `report-builder` migrados para SQL (window functions `LAG` em `lib/incident-detection.ts` + agregações `FILTER` e stride em `lib/report-queries.ts`), todos validados por testes de integração. Não carregam mais o histórico completo em memória.
 3. **Follow-ups menores:** criptografia-em-repouso da community SNMP no `POST /api/devices/bulk`; badge de contagem da sidebar (estático no SSR); cap de JSON de clientes no `DeviceStatus`; `SortButton`/hook de teste UniFi/Omada (dedup cosmético); teste do caminho de alerta do scheduler
 4. **Dependências:** `next-auth@5` já fixado em `5.0.0-beta.31`; trocar pelo release estável quando sair

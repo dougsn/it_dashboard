@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/with-auth";
+import { getDeviceStatusEvents } from "@/lib/incident-detection";
 import type { DeviceType } from "@prisma/client";
 
 export type TimelineEventKind =
@@ -35,23 +36,18 @@ export async function GET(req: Request) {
   const events: TimelineEvent[] = [];
 
   // ── Device events ──────────────────────────────────────────────────────────
-  const devices = await db.device.findMany({
-    select: {
-      id: true,
-      name: true,
-      type: true,
-      location: true,
-      history: {
-        where: { timestamp: { gte: since } },
-        orderBy: { timestamp: "asc" },
-        select: { isOnline: true, pingMs: true, timestamp: true },
-      },
-    },
-  });
+  // Fetch device metadata and the status transitions separately: the transitions
+  // query (LAG window function) returns only the rows where the device's online
+  // state OR its high-latency bucket changed — not the full history — keeping
+  // memory bounded for the whole fleet.
+  const [devices, statusEvents] = await Promise.all([
+    db.device.findMany({ select: { id: true, name: true, type: true, location: true } }),
+    getDeviceStatusEvents(since, LATENCY_THRESHOLD_MS),
+  ]);
 
   for (const device of devices) {
-    const history = device.history;
-    if (history.length === 0) continue;
+    const history = statusEvents.get(device.id);
+    if (!history || history.length === 0) continue;
 
     let wasOffline = !history[0].isOnline;
     let wasHighLatency = false;

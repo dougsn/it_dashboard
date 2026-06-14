@@ -1,6 +1,8 @@
 // ARC-A005: extracted from app/api/reports/route.ts to enable independent unit testing
 import { db } from "@/lib/db";
 import { fmtDate } from "@/lib/format";
+import { getOnlineTransitionsForDevice } from "@/lib/incident-detection";
+import { getDeviceReportStats, getDeviceChartSamples } from "@/lib/report-queries";
 import type { DeviceType } from "@prisma/client";
 
 export interface ReportSummary {
@@ -109,9 +111,17 @@ export function buildIncidents(
   return incidents;
 }
 
+export interface ResourceMetrics {
+  avgCpu: number | null;
+  cpuCount: number;
+  highCpu: number;
+  avgMem: number | null;
+  memCount: number;
+}
+
 export function buildInsights(
   summary: ReportSummary,
-  history: { isOnline: boolean; cpuLoad: number | null; memoryUsed: number | null }[],
+  metrics: ResourceMetrics,
   incidents: ReportIncident[]
 ): ReportInsight[] {
   const insights: ReportInsight[] = [];
@@ -142,11 +152,9 @@ export function buildInsights(
     insights.push({ level: "warn", text: `Pior incidente: queda de ${label} em ${fmtDate(worst.startAt)}.` });
   }
 
-  const withCpu = history.filter(h => h.cpuLoad != null);
-  if (withCpu.length > 0) {
-    const avgCpu = withCpu.reduce((s, h) => s + (h.cpuLoad ?? 0), 0) / withCpu.length;
-    const highCpu = withCpu.filter(h => (h.cpuLoad ?? 0) > 80).length;
-    const highPct = (highCpu / withCpu.length) * 100;
+  if (metrics.cpuCount > 0 && metrics.avgCpu != null) {
+    const avgCpu = metrics.avgCpu;
+    const highPct = (metrics.highCpu / metrics.cpuCount) * 100;
     if (avgCpu > 70) {
       insights.push({ level: "critical", text: `CPU sobrecarregada: média de ${avgCpu.toFixed(1)}%, acima de 80% em ${highPct.toFixed(0)}% das amostras.` });
     } else if (avgCpu > 40) {
@@ -156,9 +164,8 @@ export function buildInsights(
     }
   }
 
-  const withMem = history.filter(h => h.memoryUsed != null);
-  if (withMem.length > 0) {
-    const avgMem = withMem.reduce((s, h) => s + (h.memoryUsed ?? 0), 0) / withMem.length;
+  if (metrics.memCount > 0 && metrics.avgMem != null) {
+    const avgMem = metrics.avgMem;
     if (avgMem > 85) {
       insights.push({ level: "critical", text: `Memória crítica: uso médio de ${avgMem.toFixed(1)}% — risco de instabilidade.` });
     } else if (avgMem > 60) {
@@ -175,21 +182,19 @@ export async function buildSummaryForPeriod(
   deviceId: string,
   since: Date
 ): Promise<ReportSummary> {
-  const history = await db.statusHistory.findMany({
-    where: { deviceId, timestamp: { gte: since } },
-    orderBy: { timestamp: "asc" },
-    select: { isOnline: true, pingMs: true, timestamp: true },
-  });
-  const totalChecks = history.length;
-  const onlineChecks = history.filter(h => h.isOnline).length;
-  const uptimePct = totalChecks > 0 ? (onlineChecks / totalChecks) * 100 : 100;
-  const onlinePings = history.filter(h => h.isOnline && h.pingMs != null).map(h => h.pingMs!);
-  const avgPingMs = onlinePings.length > 0 ? Math.round(onlinePings.reduce((s, p) => s + p, 0) / onlinePings.length) : null;
-  const maxPingMs = onlinePings.length > 0 ? Math.max(...onlinePings) : null;
-  const minPingMs = onlinePings.length > 0 ? Math.min(...onlinePings) : null;
-  const incidents = buildIncidents(history, since);
+  const [stats, transitions] = await Promise.all([
+    getDeviceReportStats(deviceId, since),
+    getOnlineTransitionsForDevice(deviceId, since),
+  ]);
+  const uptimePct = stats.total > 0 ? (stats.online / stats.total) * 100 : 100;
+  const avgPingMs = stats.avgPing != null ? Math.round(stats.avgPing) : null;
+  const incidents = buildIncidents(transitions, since);
   const totalDowntimeMs = incidents.reduce((s, i) => s + (i.durationMs ?? 0), 0);
-  return { uptimePct, totalChecks, onlineChecks, incidentCount: incidents.length, totalDowntimeMs, avgPingMs, maxPingMs, minPingMs };
+  return {
+    uptimePct, totalChecks: stats.total, onlineChecks: stats.online,
+    incidentCount: incidents.length, totalDowntimeMs,
+    avgPingMs, maxPingMs: stats.maxPing, minPingMs: stats.minPing,
+  };
 }
 
 export async function buildDeviceReport(
@@ -206,22 +211,23 @@ export async function buildDeviceReport(
   });
   if (!device) return null;
 
-  const history = await db.statusHistory.findMany({
-    where: { deviceId, timestamp: { gte: since } },
-    orderBy: { timestamp: "asc" },
-    select: { isOnline: true, pingMs: true, cpuLoad: true, memoryUsed: true, timestamp: true },
-  });
+  // Stats (aggregates), incidents (transitions), and chart samples (strided) are
+  // all computed in the database — the full history is never loaded into memory.
+  const [stats, transitions, samples] = await Promise.all([
+    getDeviceReportStats(deviceId, since),
+    getOnlineTransitionsForDevice(deviceId, since),
+    getDeviceChartSamples(deviceId, since, 400),
+  ]);
 
-  const totalChecks = history.length;
-  const onlineChecks = history.filter(h => h.isOnline).length;
+  const totalChecks = stats.total;
+  const onlineChecks = stats.online;
   const uptimePct = totalChecks > 0 ? (onlineChecks / totalChecks) * 100 : 100;
 
-  const onlinePings = history.filter(h => h.isOnline && h.pingMs != null).map(h => h.pingMs!);
-  const avgPingMs = onlinePings.length > 0 ? Math.round(onlinePings.reduce((s, p) => s + p, 0) / onlinePings.length) : null;
-  const maxPingMs = onlinePings.length > 0 ? Math.max(...onlinePings) : null;
-  const minPingMs = onlinePings.length > 0 ? Math.min(...onlinePings) : null;
+  const avgPingMs = stats.avgPing != null ? Math.round(stats.avgPing) : null;
+  const maxPingMs = stats.maxPing;
+  const minPingMs = stats.minPing;
 
-  const incidents = buildIncidents(history, since);
+  const incidents = buildIncidents(transitions, since);
   const totalDowntimeMs = incidents.reduce((s, i) => s + (i.durationMs ?? 0), 0);
 
   const summary: ReportSummary = {
@@ -229,25 +235,19 @@ export async function buildDeviceReport(
     incidentCount: incidents.length, totalDowntimeMs, avgPingMs, maxPingMs, minPingMs,
   };
 
-  const pingHistory = downsample(
-    history.map(h => ({
-      timestamp: h.timestamp.toISOString(),
-      pingMs: h.isOnline ? (h.pingMs ?? null) : null,
-      isOnline: h.isOnline,
-    })),
-    400
-  );
+  const pingHistory = samples.map(h => ({
+    timestamp: h.timestamp.toISOString(),
+    pingMs: h.isOnline ? (h.pingMs ?? null) : null,
+    isOnline: h.isOnline,
+  }));
 
   const routerosHistory =
     device.type === "MIKROTIK"
-      ? downsample(
-          history.map(h => ({
-            timestamp: h.timestamp.toISOString(),
-            cpuLoad: h.cpuLoad ?? null,
-            memoryUsed: h.memoryUsed ?? null,
-          })),
-          400
-        )
+      ? samples.map(h => ({
+          timestamp: h.timestamp.toISOString(),
+          cpuLoad: h.cpuLoad ?? null,
+          memoryUsed: h.memoryUsed ?? null,
+        }))
       : null;
 
   const unifiSnapshot =
@@ -260,7 +260,11 @@ export async function buildDeviceReport(
       ? (device.currentStatus as (typeof device.currentStatus & { omadaData?: unknown }))!.omadaData
       : null;
 
-  const insights = buildInsights(summary, history, incidents);
+  const insights = buildInsights(
+    summary,
+    { avgCpu: stats.avgCpu, cpuCount: stats.cpuCount, highCpu: stats.highCpu, avgMem: stats.avgMem, memCount: stats.memCount },
+    incidents,
+  );
 
   let comparison: DeviceReport["comparison"] | undefined;
   if (compareSince && compareTo) {
