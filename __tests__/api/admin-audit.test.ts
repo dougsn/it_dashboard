@@ -57,6 +57,16 @@ describe("GET /api/admin/audit", () => {
     expect(call.where.timestamp?.lte).toBeInstanceOf(Date);
   });
 
+  it("returns 400 for invalid 'from' date", async () => {
+    const res = await GET(makeReq("from=garbage") as any);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for invalid 'to' date", async () => {
+    const res = await GET(makeReq("to=not-a-date") as any);
+    expect(res.status).toBe(400);
+  });
+
   it("handles page param", async () => {
     await GET(makeReq("page=3") as any);
     const call = (mockDb.auditLog.findMany as jest.Mock).mock.calls[0][0];

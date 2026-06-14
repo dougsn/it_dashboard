@@ -64,10 +64,13 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 
 ## 🟡 P2 — Correções médias
 
-### Branch `fix/input-validation`
-- [ ] **Datas de query sem validar `isNaN`** — `admin/audit/route.ts`, `audit/export` (Invalid Date → 500/resultado errado).
-- [ ] **`parse-body` — Content-Length burlável** — corpo sem header não é limitado; usar `bodySizeLimit` global.
-- [ ] **IP do device sem validação de formato no client** — `device-form.tsx:27` usar `z.string().ip()`.
+### Branch `fix/input-validation` ✅ CONCLUÍDA
+- [x] **Datas de query sem validar `isNaN`** — `admin/audit/route.ts` e `audit/export`: retornam 400 em data
+      inválida. Testes adicionados em `admin-audit.test.ts`.
+- [x] **`parse-body` — Content-Length burlável** — agora lê o corpo via `text()` e valida `Buffer.byteLength`
+      antes do parse (fecha a brecha de requisição chunked sem header).
+- [x] **IP do device sem validação de formato no client** — `device-form.tsx`: regex IPv4 + octetos ≤ 255,
+      espelhando o `ipSchema` do servidor.
 
 ### Branch `fix/credential-exposure`
 - [ ] ✓ **`snmpCommunity` legado em texto claro** — `lib/device-utils.ts`

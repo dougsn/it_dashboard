@@ -24,7 +24,10 @@ import { DeviceFormProtocols } from "@/components/device-form-protocols";
 
 const schema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
-  ip: z.string().min(1, "IP é obrigatório"),
+  ip: z.string()
+    .min(1, "IP é obrigatório")
+    .regex(/^(\d{1,3}\.){3}\d{1,3}$/, "Formato de IP inválido (ex: 192.168.1.1)")
+    .refine(ip => ip.split(".").every(o => parseInt(o, 10) <= 255), "Octetos do IP devem estar entre 0 e 255"),
   type: z.enum(["MIKROTIK", "DVR", "CAMERA", "OTHER", "UNIFI_AP", "OMADA_AP"]),
   location: z.string().optional(),
   notes: z.string().optional(),

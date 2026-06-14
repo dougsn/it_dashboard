@@ -33,8 +33,16 @@ export async function GET(req: NextRequest) {
   if (entity) where.entity = entity;
   if (from || to) {
     where.timestamp = {};
-    if (from) where.timestamp.gte = new Date(from);
-    if (to)   where.timestamp.lte = new Date(to);
+    if (from) {
+      const d = new Date(from);
+      if (isNaN(d.getTime())) return NextResponse.json({ error: "Parâmetro 'from' inválido" }, { status: 400 });
+      where.timestamp.gte = d;
+    }
+    if (to) {
+      const d = new Date(to);
+      if (isNaN(d.getTime())) return NextResponse.json({ error: "Parâmetro 'to' inválido" }, { status: 400 });
+      where.timestamp.lte = d;
+    }
   }
 
   const logs = await db.auditLog.findMany({
