@@ -96,10 +96,12 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 - [x] **Cache de `/api/overview` em variável de módulo** — documentado como premissa single-process
       (consistente com SEC-014); migrar para Redis/`unstable_cache` se escalar horizontalmente.
 
-### Branch `fix/forms-ux`
-- [ ] **`Select` de tipo não controlado por RHF** — `device-form.tsx:228`, `bulk-device-form.tsx` — usar `value={watch("type")}`.
-- [ ] **Double-submit possível** — usar `disabled={loading || isSubmitting}`; `try/finally` nos handlers de
-      `users-client.tsx` (create/edit/delete/totp) para não travar o botão.
+### Branch `fix/forms-ux` ✅ CONCLUÍDA
+- [x] **`Select` de tipo não controlado por RHF** — `device-form.tsx` e `bulk-device-form.tsx` agora usam
+      `value={deviceType}` (sincroniza com RHF, ex.: reset).
+- [x] **Double-submit possível** — `device-form` submit usa `disabled={loading || isSubmitting}`;
+      `try/finally` em todos os handlers de `users-client.tsx` (create/edit/delete/totp×3) para nunca
+      travar o botão em erro de rede. (profile-client já estava correto.)
 
 ---
 
