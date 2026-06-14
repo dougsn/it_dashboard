@@ -98,61 +98,76 @@ export default function UsersClient() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setCreating(true);
-    const res = await fetch("/api/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: createUsername, password: createPassword, role: createRole }),
-    });
-    if (res.ok) {
-      toast.success("Usuário criado com sucesso");
-      setShowCreate(false);
-      setCreateUsername("");
-      setCreatePassword("");
-      setCreateRole("VIEWER");
-      await load();
-    } else {
-      const body = await res.json().catch(() => ({}));
-      toast.error(body.error ?? "Erro ao criar usuário");
+    try {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: createUsername, password: createPassword, role: createRole }),
+      });
+      if (res.ok) {
+        toast.success("Usuário criado com sucesso");
+        setShowCreate(false);
+        setCreateUsername("");
+        setCreatePassword("");
+        setCreateRole("VIEWER");
+        await load();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body.error ?? "Erro ao criar usuário");
+      }
+    } catch {
+      toast.error("Erro ao criar usuário");
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   }
 
   async function handleSaveEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editUser) return;
     setSaving(true);
-    const body: Record<string, string> = { role: editRole };
-    if (editPassword) body.password = editPassword;
-    const res = await fetch(`/api/users/${editUser.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      toast.success("Usuário atualizado");
-      setEditUser(null);
-      setEditPassword("");
-      await load();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      toast.error(data.error ?? "Erro ao salvar");
+    try {
+      const body: Record<string, string> = { role: editRole };
+      if (editPassword) body.password = editPassword;
+      const res = await fetch(`/api/users/${editUser.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        toast.success("Usuário atualizado");
+        setEditUser(null);
+        setEditPassword("");
+        await load();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error ?? "Erro ao salvar");
+      }
+    } catch {
+      toast.error("Erro ao salvar");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   async function handleDelete() {
     if (!deleteUser) return;
     setDeleting(true);
-    const res = await fetch(`/api/users/${deleteUser.id}`, { method: "DELETE" });
-    if (res.ok) {
-      toast.success(`Usuário "${deleteUser.username}" removido`);
-      setDeleteUser(null);
-      await load();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      toast.error(data.error ?? "Erro ao excluir");
+    try {
+      const res = await fetch(`/api/users/${deleteUser.id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success(`Usuário "${deleteUser.username}" removido`);
+        setDeleteUser(null);
+        await load();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error ?? "Erro ao excluir");
+      }
+    } catch {
+      toast.error("Erro ao excluir");
+    } finally {
+      setDeleting(false);
     }
-    setDeleting(false);
   }
 
   function openEdit(u: UserRow) {
@@ -178,43 +193,58 @@ export default function UsersClient() {
   async function startTotpSetup() {
     if (!manage2FAUser) return;
     setTotpStep("setup-loading");
-    const res = await fetch(`/api/users/${manage2FAUser.id}/totp`);
-    if (!res.ok) { toast.error("Erro ao gerar QR code"); setTotpStep("idle"); return; }
-    const data = await res.json();
-    setTotpSetupData(data);
-    setTotpStep("setup");
+    try {
+      const res = await fetch(`/api/users/${manage2FAUser.id}/totp`);
+      if (!res.ok) { toast.error("Erro ao gerar QR code"); setTotpStep("idle"); return; }
+      const data = await res.json();
+      setTotpSetupData(data);
+      setTotpStep("setup");
+    } catch {
+      toast.error("Erro ao gerar QR code");
+      setTotpStep("idle");
+    }
   }
 
   async function confirmTotpEnable(e: React.FormEvent) {
     e.preventDefault();
     if (!manage2FAUser || !totpSetupData) return;
     setTotpStep("setup-verifying");
-    const res = await fetch(`/api/users/${manage2FAUser.id}/totp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: totpToken.replace(/\D/g, ""), secret: totpSetupData.secret }),
-    });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error ?? "Token inválido"); setTotpStep("setup"); return; }
-    toast.success(`2FA ativado para ${manage2FAUser.username}`);
-    close2FA();
-    await load();
+    try {
+      const res = await fetch(`/api/users/${manage2FAUser.id}/totp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: totpToken.replace(/\D/g, ""), secret: totpSetupData.secret }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "Token inválido"); setTotpStep("setup"); return; }
+      toast.success(`2FA ativado para ${manage2FAUser.username}`);
+      close2FA();
+      await load();
+    } catch {
+      toast.error("Erro ao ativar 2FA");
+      setTotpStep("setup");
+    }
   }
 
   async function confirmTotpDisable(e: React.FormEvent) {
     e.preventDefault();
     if (!manage2FAUser) return;
     setTotpStep("disable-verifying");
-    const res = await fetch(`/api/users/${manage2FAUser.id}/totp`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: totpToken.replace(/\D/g, "") }),
-    });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error ?? "Token inválido"); setTotpStep("disable"); return; }
-    toast.success(`2FA desativado para ${manage2FAUser.username}`);
-    close2FA();
-    await load();
+    try {
+      const res = await fetch(`/api/users/${manage2FAUser.id}/totp`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: totpToken.replace(/\D/g, "") }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "Token inválido"); setTotpStep("disable"); return; }
+      toast.success(`2FA desativado para ${manage2FAUser.username}`);
+      close2FA();
+      await load();
+    } catch {
+      toast.error("Erro ao desativar 2FA");
+      setTotpStep("disable");
+    }
   }
 
   async function copyTotpSecret() {

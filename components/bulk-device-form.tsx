@@ -316,7 +316,7 @@ export function BulkDeviceForm() {
             <div className="space-y-2">
               <Label>Tipo</Label>
               <Select
-                defaultValue="CAMERA"
+                value={deviceType}
                 onValueChange={(v) => {
                   setValue("type", v as FormData["type"]);
                   if (v !== "MIKROTIK") setValue("routerosEnabled", false);

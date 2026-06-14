@@ -159,7 +159,7 @@ export function DeviceForm({ device }: DeviceFormProps) {
     watch,
     setValue,
     trigger,
-    formState: { errors, isDirty },
+    formState: { errors, isDirty, isSubmitting },
   } = methods;
 
   const deviceType = watch("type");
@@ -231,7 +231,7 @@ export function DeviceForm({ device }: DeviceFormProps) {
               <div className="space-y-2">
                 <Label htmlFor="type">Tipo</Label>
                 <Select
-                  defaultValue={device?.type ?? "MIKROTIK"}
+                  value={deviceType}
                   onValueChange={(v) => {
                     setValue("type", v as FormData["type"]);
                     // Disable protocol toggles that don't belong to the new type
@@ -324,8 +324,8 @@ export function DeviceForm({ device }: DeviceFormProps) {
         </Card>
 
         <div className="flex items-center gap-3">
-          <Button type="submit" disabled={loading}>
-            {loading ? "Salvando..." : device ? "Atualizar" : "Cadastrar"}
+          <Button type="submit" disabled={loading || isSubmitting}>
+            {loading || isSubmitting ? "Salvando..." : device ? "Atualizar" : "Cadastrar"}
           </Button>
           <Button
             type="button"
