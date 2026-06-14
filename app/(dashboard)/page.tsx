@@ -383,15 +383,15 @@ export default function OverviewPage() {
   const [drawerDeviceId, setDrawerDeviceId] = useState<string | null>(null);
   const [drawerLinkId, setDrawerLinkId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
       const [devRes, linkRes, healthRes, incRes, ovRes, tlRes] = await Promise.all([
-        fetch("/api/devices"),
-        fetch("/api/links"),
-        fetch("/api/health"),
-        fetch("/api/incidents?hours=168"),
-        fetch("/api/overview"),
-        fetch("/api/timeline?hours=24"),
+        fetch("/api/devices", { signal }),
+        fetch("/api/links", { signal }),
+        fetch("/api/health", { signal }),
+        fetch("/api/incidents?hours=168", { signal }),
+        fetch("/api/overview", { signal }),
+        fetch("/api/timeline?hours=24", { signal }),
       ]);
       if (devRes.ok) setDevices(await devRes.json());
       if (linkRes.ok) setLinks(await linkRes.json());
@@ -401,9 +401,10 @@ export default function OverviewPage() {
       if (tlRes.ok) setTimeline(await tlRes.json());
       setLastUpdated(new Date());
     } catch (err) {
+      if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
       console.error("[overview] falha ao carregar dados:", err);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, []);
 
@@ -459,7 +460,7 @@ export default function OverviewPage() {
         live={!loading}
         pollIntervalMs={30_000}
         lastUpdated={lastUpdated}>
-        <button onClick={load}
+        <button onClick={() => load()}
           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
           <RefreshCw className="h-3.5 w-3.5" />Atualizar
         </button>

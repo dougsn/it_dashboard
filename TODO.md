@@ -88,10 +88,13 @@ Itens marcados com ✓ foram verificados diretamente no código; os demais devem
 - [x] **Validação de env no Next.js** (SEC-037) — `instrumentation.ts` chama `validateKey()`/`validateSecret()`
       no `register()` — fail-fast no startup do servidor web.
 
-### Branch `fix/data-fetching-races`
-- [ ] **Sem `AbortController` em nenhum poll** — resposta lenta sobrescreve dados frescos (drawer 1h→7d).
-      Adicionar `AbortController` + `signal` em cada `load`, abortar no cleanup/poll seguinte.
-- [ ] **Cache de `/api/overview` em variável de módulo** — inútil/stale em multi-processo; usar `unstable_cache` ou documentar premissa single-process.
+### Branch `fix/data-fetching-races` ✅ CONCLUÍDA
+- [x] **Sem `AbortController` em nenhum poll** — `usePolling` agora cria/aborta `AbortController` por tick;
+      `page`, `devices`, `devices/[id]`, `device-detail-drawer` e `link-detail-drawer` propagam o signal e
+      ignoram `AbortError`. Corrige a corrida de troca de parâmetro (drawer 1h→7d) e o clobber pós-close.
+      Também corrige o `refreshTraffic` ausente nas deps do link-drawer.
+- [x] **Cache de `/api/overview` em variável de módulo** — documentado como premissa single-process
+      (consistente com SEC-014); migrar para Redis/`unstable_cache` se escalar horizontalmente.
 
 ### Branch `fix/forms-ux`
 - [ ] **`Select` de tipo não controlado por RHF** — `device-form.tsx:228`, `bulk-device-form.tsx` — usar `value={watch("type")}`.

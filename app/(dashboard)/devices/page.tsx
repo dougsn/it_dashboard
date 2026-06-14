@@ -246,11 +246,11 @@ export default function DevicesPage() {
     }
   }
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
       const [devRes, ovRes] = await Promise.all([
-        fetch("/api/devices"),
-        fetch("/api/overview"),
+        fetch("/api/devices", { signal }),
+        fetch("/api/overview", { signal }),
       ]);
       if (devRes.ok) {
         const data = await devRes.json();
@@ -260,9 +260,10 @@ export default function DevicesPage() {
       if (ovRes.ok) setOverviewData(await ovRes.json());
       if (devRes.ok || ovRes.ok) setLastUpdated(new Date());
     } catch (err) {
+      if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
       console.error("[devices] falha ao carregar dados:", err);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [notify]);
 

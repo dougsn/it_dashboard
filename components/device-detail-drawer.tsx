@@ -98,15 +98,22 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
   const [hours, setHours] = useState<HourOption>(24);
   const [now, setNow] = useState(0); // 0 on SSR, set after mount to avoid hydration mismatch
 
-  const fetchData = useCallback(async (id: string, h: number) => {
+  const fetchData = useCallback(async (id: string, h: number, signal?: AbortSignal) => {
     setLoading(true);
-    const [dev, hist] = await Promise.all([
-      fetch(`/api/devices/${id}`).then((r) => r.json()),
-      fetch(`/api/status/${id}?hours=${h}`).then((r) => r.json()),
-    ]);
-    setDevice(dev);
-    setHistory(Array.isArray(hist) ? hist : []);
-    setLoading(false);
+    try {
+      const [dev, hist] = await Promise.all([
+        fetch(`/api/devices/${id}`, { signal }).then((r) => r.json()),
+        fetch(`/api/status/${id}?hours=${h}`, { signal }).then((r) => r.json()),
+      ]);
+      setDevice(dev);
+      setHistory(Array.isArray(hist) ? hist : []);
+    } catch (err) {
+      // Ignore aborts (param changed mid-flight); only reset on real errors
+      if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
+      setDevice(null); setHistory([]);
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -115,7 +122,9 @@ export function DeviceDetailDrawer({ deviceId, onClose }: Props) {
 
   useEffect(() => {
     if (!deviceId) { setDevice(null); setHistory([]); return; }
-    fetchData(deviceId, hours);
+    const controller = new AbortController();
+    fetchData(deviceId, hours, controller.signal);
+    return () => controller.abort();
   }, [deviceId, hours, fetchData]);
 
   async function handleTest() {

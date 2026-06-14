@@ -154,24 +154,27 @@ export default function DeviceDetailPage({
   const [clientSort, setClientSort] = useState<ClientSortKey>("signal");
   const [historyExpanded, setHistoryExpanded] = useState(false);
 
-  const load = useCallback(async (h: number) => {
+  const load = useCallback(async (h: number, signal?: AbortSignal) => {
     try {
       const [devRes, histRes] = await Promise.all([
-        fetch(`/api/devices/${id}`, { cache: "no-store" }),
-        fetch(`/api/status/${id}?hours=${h}`, { cache: "no-store" }),
+        fetch(`/api/devices/${id}`, { cache: "no-store", signal }),
+        fetch(`/api/status/${id}?hours=${h}`, { cache: "no-store", signal }),
       ]);
       if (devRes.ok) setDevice(await devRes.json());
       if (histRes.ok) setHistory(await histRes.json());
     } catch (err) {
+      if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
       console.error("[device-detail] falha ao carregar dados:", err);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [id]);
 
   useEffect(() => {
     setLoading(true);
-    load(hours);
+    const controller = new AbortController();
+    load(hours, controller.signal);
+    return () => controller.abort();
   }, [hours, load]);
 
   useEffect(() => {

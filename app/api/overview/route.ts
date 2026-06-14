@@ -4,6 +4,9 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/with-auth";
 import { db } from "@/lib/db";
 
+// In-process cache (15s TTL). Assumes single-instance deployment — same premise as
+// the in-memory login rate limiter (SEC-014). In a multi-process/serverless setup
+// each instance would keep its own cache; move to Redis/unstable_cache if scaling out.
 const CACHE_TTL_MS = 15_000;
 let cache: { data: OverviewData; expiresAt: number } | null = null;
 

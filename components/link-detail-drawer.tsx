@@ -104,25 +104,33 @@ export function LinkDetailDrawer({ linkId, onClose }: Props) {
   const [data, setData] = useState<EventsResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const fetchData = useCallback(async (id: string) => {
+  const fetchData = useCallback(async (id: string, signal?: AbortSignal) => {
     setLoading(true);
-    const res = await fetch(`/api/links/${id}/events?hours=720`);
-    if (res.ok) setData(await res.json());
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/links/${id}/events?hours=720`, { signal });
+      if (res.ok) setData(await res.json());
+    } catch (err) {
+      if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
   }, []);
 
   // Lightweight traffic-only refresh: just re-fetch the link object
-  const refreshTraffic = useCallback(async (id: string) => {
-    const res = await fetch(`/api/links/${id}/events?hours=720`);
-    if (res.ok) setData(await res.json());
+  const refreshTraffic = useCallback(async (id: string, signal?: AbortSignal) => {
+    try {
+      const res = await fetch(`/api/links/${id}/events?hours=720`, { signal });
+      if (res.ok) setData(await res.json());
+    } catch { /* ignore transient/aborted */ }
   }, []);
 
   useEffect(() => {
     if (!linkId) { setData(null); return; }
-    fetchData(linkId);
-    const t = setInterval(() => refreshTraffic(linkId), 30_000);
-    return () => clearInterval(t);
-  }, [linkId, fetchData]);
+    const controller = new AbortController();
+    fetchData(linkId, controller.signal);
+    const t = setInterval(() => refreshTraffic(linkId, controller.signal), 30_000);
+    return () => { clearInterval(t); controller.abort(); };
+  }, [linkId, fetchData, refreshTraffic]);
 
   const link = data?.link;
   const events = data?.events ?? [];
