@@ -10,9 +10,8 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/db", () => ({
   db: {
-    device: {
-      findMany: jest.fn(),
-    },
+    device: { findMany: jest.fn() },
+    $queryRaw: jest.fn(),
   },
 }));
 
@@ -20,7 +19,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>;
-const mockDb = db as jest.Mocked<typeof db>;
+const mockDb = db as unknown as { device: { findMany: jest.Mock }; $queryRaw: jest.Mock };
 
 const FAKE_SESSION = { user: { id: "user-1", name: "admin", role: "ADMIN" }, expires: "2099-01-01" };
 
@@ -28,22 +27,22 @@ function makeReq(params = "") {
   return new NextRequest(`http://localhost/api/incidents${params}`);
 }
 
-function makeDevice(history: { isOnline: boolean; timestamp: Date }[]) {
-  return {
-    id: "device-1",
-    name: "Router SP",
-    type: "MIKROTIK",
-    currentStatus: null,
-    history,
-  };
+// device metadata returned by findMany (no history)
+const DEVICE_META = [{ id: "device-1", name: "Router SP", type: "MIKROTIK" }];
+
+// helper: transition rows as returned by $queryRaw (flat, with deviceId)
+function rows(history: { isOnline: boolean; timestamp: Date }[]) {
+  return history.map((h) => ({ deviceId: "device-1", isOnline: h.isOnline, timestamp: h.timestamp }));
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockDb.device.findMany.mockResolvedValue(DEVICE_META);
+  mockDb.$queryRaw.mockResolvedValue([]);
 });
 
 describe("GET /api/incidents", () => {
-  it("returns 401 when not authenticated (regression: endpoint was public)", async () => {
+  it("returns 401 when not authenticated", async () => {
     mockAuth.mockResolvedValue(null as never);
     const res = await GET(makeReq());
     expect(res.status).toBe(401);
@@ -51,7 +50,8 @@ describe("GET /api/incidents", () => {
 
   it("returns paginated envelope with empty data when no devices exist", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
-    (mockDb.device.findMany as jest.Mock).mockResolvedValue([]);
+    mockDb.device.findMany.mockResolvedValue([]);
+    mockDb.$queryRaw.mockResolvedValue([]);
 
     const res = await GET(makeReq());
     expect(res.status).toBe(200);
@@ -61,9 +61,9 @@ describe("GET /api/incidents", () => {
     expect(body.hasMore).toBe(false);
   });
 
-  it("returns empty data array when device has no history in window", async () => {
+  it("returns empty data when device has no history in window", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
-    (mockDb.device.findMany as jest.Mock).mockResolvedValue([makeDevice([])]);
+    mockDb.$queryRaw.mockResolvedValue([]);
 
     const res = await GET(makeReq());
     const body = await res.json();
@@ -74,16 +74,14 @@ describe("GET /api/incidents", () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
 
     const t1 = new Date("2024-01-01T10:00:00Z");
-    const t2 = new Date("2024-01-01T10:05:00Z"); // went offline
-    const t3 = new Date("2024-01-01T10:10:00Z"); // came back
+    const t2 = new Date("2024-01-01T10:05:00Z");
+    const t3 = new Date("2024-01-01T10:10:00Z");
 
-    (mockDb.device.findMany as jest.Mock).mockResolvedValue([
-      makeDevice([
-        { isOnline: true,  timestamp: t1 },
-        { isOnline: false, timestamp: t2 },
-        { isOnline: true,  timestamp: t3 },
-      ]),
-    ]);
+    mockDb.$queryRaw.mockResolvedValue(rows([
+      { isOnline: true,  timestamp: t1 },
+      { isOnline: false, timestamp: t2 },
+      { isOnline: true,  timestamp: t3 },
+    ]));
 
     const res = await GET(makeReq());
     const { data } = await res.json();
@@ -99,14 +97,12 @@ describe("GET /api/incidents", () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
 
     const t1 = new Date("2024-01-01T10:00:00Z");
-    const t2 = new Date("2024-01-01T10:05:00Z"); // went offline, still down
+    const t2 = new Date("2024-01-01T10:05:00Z");
 
-    (mockDb.device.findMany as jest.Mock).mockResolvedValue([
-      makeDevice([
-        { isOnline: true,  timestamp: t1 },
-        { isOnline: false, timestamp: t2 },
-      ]),
-    ]);
+    mockDb.$queryRaw.mockResolvedValue(rows([
+      { isOnline: true,  timestamp: t1 },
+      { isOnline: false, timestamp: t2 },
+    ]));
 
     const res = await GET(makeReq());
     const { data } = await res.json();
@@ -121,14 +117,12 @@ describe("GET /api/incidents", () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
 
     const t1 = new Date("2024-01-01T10:00:00Z");
-    const t2 = new Date("2024-01-01T10:30:00Z"); // came back
+    const t2 = new Date("2024-01-01T10:30:00Z");
 
-    (mockDb.device.findMany as jest.Mock).mockResolvedValue([
-      makeDevice([
-        { isOnline: false, timestamp: t1 }, // already offline at start of window
-        { isOnline: true,  timestamp: t2 },
-      ]),
-    ]);
+    mockDb.$queryRaw.mockResolvedValue(rows([
+      { isOnline: false, timestamp: t1 },
+      { isOnline: true,  timestamp: t2 },
+    ]));
 
     const res = await GET(makeReq());
     const { data } = await res.json();
@@ -138,16 +132,15 @@ describe("GET /api/incidents", () => {
     expect(data[0].endAt).toBe(t2.toISOString());
   });
 
-  it("caps ?hours= at 720", async () => {
+  it("caps ?hours= at 720 (passes the right `since` to the transition query)", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
-    (mockDb.device.findMany as jest.Mock).mockResolvedValue([]);
 
     await GET(makeReq("?hours=9999"));
 
-    const callArgs = (mockDb.device.findMany as jest.Mock).mock.calls[0][0];
-    const since: Date = callArgs.include.history.where.timestamp.gte;
-    const windowHours = (Date.now() - since.getTime()) / 3_600_000;
-    expect(windowHours).toBeLessThanOrEqual(720 + 1); // allow 1h tolerance
+    // $queryRaw is a tagged template: call args are (strings, ...values); since is the first value
+    const sinceArg: Date = mockDb.$queryRaw.mock.calls[0][1];
+    const windowHours = (Date.now() - sinceArg.getTime()) / 3_600_000;
+    expect(windowHours).toBeLessThanOrEqual(720 + 1);
   });
 
   it("returns incidents sorted by startAt descending", async () => {
@@ -162,23 +155,19 @@ describe("GET /api/incidents", () => {
       new Date("2024-01-01T09:10:00Z"),
     ];
 
-    // Two separate incidents: first at 08:05, second at 09:05
-    (mockDb.device.findMany as jest.Mock).mockResolvedValue([
-      makeDevice([
-        { isOnline: true,  timestamp: times[0] },
-        { isOnline: false, timestamp: times[1] },
-        { isOnline: true,  timestamp: times[2] },
-        { isOnline: false, timestamp: times[3] },
-        { isOnline: false, timestamp: times[4] },
-        { isOnline: true,  timestamp: times[5] },
-      ]),
-    ]);
+    mockDb.$queryRaw.mockResolvedValue(rows([
+      { isOnline: true,  timestamp: times[0] },
+      { isOnline: false, timestamp: times[1] },
+      { isOnline: true,  timestamp: times[2] },
+      { isOnline: false, timestamp: times[3] },
+      { isOnline: false, timestamp: times[4] },
+      { isOnline: true,  timestamp: times[5] },
+    ]));
 
     const res = await GET(makeReq());
     const { data } = await res.json();
 
     expect(data).toHaveLength(2);
-    // Most recent first
     expect(new Date(data[0].startAt).getTime()).toBeGreaterThan(
       new Date(data[1].startAt).getTime()
     );
@@ -187,7 +176,6 @@ describe("GET /api/incidents", () => {
   it("paginates results with page and limit params", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
 
-    // Build 30 offline→online transitions → 30 incidents (spaced 10 min apart)
     const history: { isOnline: boolean; timestamp: Date }[] = [];
     const origin = new Date("2024-01-01T00:00:00Z").getTime();
     for (let i = 0; i < 30; i++) {
@@ -196,7 +184,7 @@ describe("GET /api/incidents", () => {
       history.push({ isOnline: false, timestamp: new Date(base + 60_000) });
       history.push({ isOnline: true,  timestamp: new Date(base + 120_000) });
     }
-    (mockDb.device.findMany as jest.Mock).mockResolvedValue([makeDevice(history)]);
+    mockDb.$queryRaw.mockResolvedValue(rows(history));
 
     const res1 = await GET(makeReq("?page=1&limit=10"));
     const body1 = await res1.json();
@@ -205,7 +193,7 @@ describe("GET /api/incidents", () => {
     expect(body1.hasMore).toBe(true);
     expect(body1.page).toBe(1);
 
-    (mockDb.device.findMany as jest.Mock).mockResolvedValue([makeDevice(history)]);
+    mockDb.$queryRaw.mockResolvedValue(rows(history));
     const res2 = await GET(makeReq("?page=3&limit=10"));
     const body2 = await res2.json();
     expect(body2.data).toHaveLength(10);
@@ -214,7 +202,7 @@ describe("GET /api/incidents", () => {
 
   it("respects limit cap of 100", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
-    (mockDb.device.findMany as jest.Mock).mockResolvedValue([]);
+    mockDb.$queryRaw.mockResolvedValue([]);
 
     const res = await GET(makeReq("?limit=9999"));
     const body = await res.json();
