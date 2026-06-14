@@ -26,7 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Users, Plus, Key, Trash2, ShieldCheck, Eye, Wrench } from "lucide-react";
+import { Users, Plus, Key, Trash2, ShieldCheck, Eye, Wrench, KeyRound, ShieldOff } from "lucide-react";
 import { fmtDate } from "@/lib/format";
 import { toast } from "sonner";
 
@@ -36,6 +36,7 @@ interface UserRow {
   id: string;
   username: string;
   role: UserRole;
+  totpEnabled: boolean;
   createdAt: string;
 }
 
@@ -77,6 +78,13 @@ export default function UsersClient() {
   // Delete dialog
   const [deleteUser, setDeleteUser] = useState<UserRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Manage 2FA dialog
+  const [manage2FAUser, setManage2FAUser] = useState<UserRow | null>(null);
+  const [totpStep, setTotpStep] = useState<"idle" | "setup-loading" | "setup" | "setup-verifying" | "disable" | "disable-verifying">("idle");
+  const [totpSetupData, setTotpSetupData] = useState<{ secret: string; qrDataUrl: string } | null>(null);
+  const [totpToken, setTotpToken] = useState("");
+  const [totpCopied, setTotpCopied] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/users", { cache: "no-store" });
@@ -153,6 +161,69 @@ export default function UsersClient() {
     setEditPassword("");
   }
 
+  function open2FA(u: UserRow) {
+    setManage2FAUser(u);
+    setTotpStep("idle");
+    setTotpSetupData(null);
+    setTotpToken("");
+  }
+
+  function close2FA() {
+    setManage2FAUser(null);
+    setTotpStep("idle");
+    setTotpSetupData(null);
+    setTotpToken("");
+  }
+
+  async function startTotpSetup() {
+    if (!manage2FAUser) return;
+    setTotpStep("setup-loading");
+    const res = await fetch(`/api/users/${manage2FAUser.id}/totp`);
+    if (!res.ok) { toast.error("Erro ao gerar QR code"); setTotpStep("idle"); return; }
+    const data = await res.json();
+    setTotpSetupData(data);
+    setTotpStep("setup");
+  }
+
+  async function confirmTotpEnable(e: React.FormEvent) {
+    e.preventDefault();
+    if (!manage2FAUser || !totpSetupData) return;
+    setTotpStep("setup-verifying");
+    const res = await fetch(`/api/users/${manage2FAUser.id}/totp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: totpToken.replace(/\D/g, ""), secret: totpSetupData.secret }),
+    });
+    const data = await res.json();
+    if (!res.ok) { toast.error(data.error ?? "Token inválido"); setTotpStep("setup"); return; }
+    toast.success(`2FA ativado para ${manage2FAUser.username}`);
+    close2FA();
+    await load();
+  }
+
+  async function confirmTotpDisable(e: React.FormEvent) {
+    e.preventDefault();
+    if (!manage2FAUser) return;
+    setTotpStep("disable-verifying");
+    const res = await fetch(`/api/users/${manage2FAUser.id}/totp`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: totpToken.replace(/\D/g, "") }),
+    });
+    const data = await res.json();
+    if (!res.ok) { toast.error(data.error ?? "Token inválido"); setTotpStep("disable"); return; }
+    toast.success(`2FA desativado para ${manage2FAUser.username}`);
+    close2FA();
+    await load();
+  }
+
+  async function copyTotpSecret() {
+    if (!totpSetupData) return;
+    await navigator.clipboard.writeText(totpSetupData.secret);
+    setTotpCopied(true);
+    setTimeout(() => setTotpCopied(false), 2000);
+  }
+
   return (
     <>
       <Topbar title="Usuários" subtitle="Gerenciamento de acesso" icon={Users}>
@@ -176,6 +247,7 @@ export default function UsersClient() {
                   <tr className="border-b text-xs text-muted-foreground">
                     <th className="px-4 py-3 text-left font-medium">Usuário</th>
                     <th className="px-4 py-3 text-left font-medium">Função</th>
+                    <th className="px-4 py-3 text-left font-medium">2FA</th>
                     <th className="px-4 py-3 text-left font-medium">Criado em</th>
                     <th className="px-4 py-3" />
                   </tr>
@@ -192,13 +264,28 @@ export default function UsersClient() {
                             {ROLE_LABEL[u.role]}
                           </Badge>
                         </td>
+                        <td className="px-4 py-3">
+                          {u.totpEnabled ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-success bg-success/10 px-2 py-0.5 rounded-full">
+                              <ShieldCheck className="h-3 w-3" aria-hidden="true" />Ativo
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                              <ShieldOff className="h-3 w-3" aria-hidden="true" />Inativo
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-muted-foreground text-xs">
                           {fmtDate(u.createdAt, { day: "2-digit", month: "2-digit", year: "numeric" })}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-2">
                             <Button size="sm" variant="outline" onClick={() => openEdit(u)}>
-                              <Key className="h-3.5 w-3.5 mr-1" />Editar
+                              <Key className="h-3.5 w-3.5 mr-1" aria-hidden="true" />Editar
+                            </Button>
+                            <Button size="sm" variant="outline" aria-label={`Gerenciar 2FA de ${u.username}`}
+                              onClick={() => open2FA(u)}>
+                              <KeyRound className="h-3.5 w-3.5 mr-1" aria-hidden="true" />2FA
                             </Button>
                             <Button size="sm" variant="ghost" aria-label={`Remover usuário ${u.username}`}
                               className="text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -305,6 +392,110 @@ export default function UsersClient() {
               <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* 2FA management dialog */}
+      <Dialog open={!!manage2FAUser} onOpenChange={(o) => !o && close2FA()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-primary" aria-hidden="true" />
+              Gerenciar 2FA — {manage2FAUser?.username}
+            </DialogTitle>
+          </DialogHeader>
+
+          {manage2FAUser && (
+            <div className="space-y-4">
+              {/* Status */}
+              <div className={`flex items-center gap-3 rounded-xl p-3.5 border ${manage2FAUser.totpEnabled ? "bg-success/5 border-success/20" : "bg-muted/40 border-border/60"}`}>
+                {manage2FAUser.totpEnabled
+                  ? <ShieldCheck className="h-4 w-4 text-success shrink-0" aria-hidden="true" />
+                  : <ShieldOff className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+                }
+                <p className={`text-sm font-semibold ${manage2FAUser.totpEnabled ? "text-success" : "text-muted-foreground"}`}>
+                  2FA {manage2FAUser.totpEnabled ? "ativado" : "desativado"}
+                </p>
+              </div>
+
+              {/* Idle — action buttons */}
+              {totpStep === "idle" && (
+                <div className="flex gap-2">
+                  {!manage2FAUser.totpEnabled ? (
+                    <Button className="flex-1" onClick={startTotpSetup}>
+                      <ShieldCheck className="h-4 w-4 mr-1.5" aria-hidden="true" />Ativar 2FA
+                    </Button>
+                  ) : (
+                    <Button variant="outline" className="flex-1 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => { setTotpStep("disable"); setTotpToken(""); }}>
+                      <ShieldOff className="h-4 w-4 mr-1.5" aria-hidden="true" />Desativar 2FA
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Setup: QR + verification */}
+              {(totpStep === "setup" || totpStep === "setup-verifying") && totpSetupData && (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    O usuário deve escanear o QR code abaixo com um app autenticador e confirmar com o código gerado.
+                  </p>
+                  <div className="flex justify-center">
+                    <div className="p-3 bg-white rounded-xl border border-border">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={totpSetupData.qrDataUrl} alt="QR code para configurar o autenticador" width={140} height={140} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 font-mono text-[12px] bg-muted px-3 py-2 rounded-lg border border-border text-accent-foreground truncate">
+                      {totpSetupData.secret}
+                    </code>
+                    <button onClick={copyTotpSecret} aria-label="Copiar chave secreta"
+                      className="p-2 rounded-lg border border-border hover:bg-muted transition-colors text-muted-foreground shrink-0">
+                      {totpCopied
+                        ? <ShieldCheck className="h-4 w-4 text-success" aria-hidden="true" />
+                        : <KeyRound className="h-4 w-4" aria-hidden="true" />
+                      }
+                    </button>
+                  </div>
+                  <form onSubmit={confirmTotpEnable} className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="admin-totp-enable">Código de confirmação (6 dígitos)</Label>
+                      <Input id="admin-totp-enable" value={totpToken}
+                        onChange={(e) => setTotpToken(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        placeholder="000 000" maxLength={6} inputMode="numeric" autoComplete="one-time-code"
+                        className="font-mono text-lg tracking-[.3em] text-center" required />
+                    </div>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setTotpStep("idle")} disabled={totpStep === "setup-verifying"}>Cancelar</Button>
+                      <Button type="submit" disabled={totpToken.length !== 6 || totpStep === "setup-verifying"}>
+                        {totpStep === "setup-verifying" ? "Verificando..." : "Confirmar e ativar"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </div>
+              )}
+
+              {/* Disable: token verification */}
+              {(totpStep === "disable" || totpStep === "disable-verifying") && (
+                <form onSubmit={confirmTotpDisable} className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="admin-totp-disable">Código atual do autenticador</Label>
+                    <Input id="admin-totp-disable" value={totpToken}
+                      onChange={(e) => setTotpToken(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="000 000" maxLength={6} inputMode="numeric" autoComplete="one-time-code"
+                      className="font-mono text-lg tracking-[.3em] text-center" required autoFocus />
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setTotpStep("idle")} disabled={totpStep === "disable-verifying"}>Cancelar</Button>
+                    <Button type="submit" variant="destructive" disabled={totpToken.length !== 6 || totpStep === "disable-verifying"}>
+                      {totpStep === "disable-verifying" ? "Desativando..." : "Desativar 2FA"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

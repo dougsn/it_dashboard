@@ -295,13 +295,15 @@ export function Sidebar({
       {/* User footer */}
       <div className="pt-3 border-t border-border/60">
         <div className="flex items-center gap-2.5 p-2 rounded-[10px] transition-colors hover:bg-muted group">
-          <UserAvatar name={userName} />
-          <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-bold leading-tight truncate">{userName}</div>
-            <div className="text-[11px] text-muted-foreground font-semibold">
-              {userRole === "ADMIN" ? "Administrador" : userRole === "OPERADOR" ? "Operador" : "Viewer"}
+          <Link href="/profile" className="flex items-center gap-2.5 flex-1 min-w-0" aria-label="Minha conta">
+            <UserAvatar name={userName} />
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-bold leading-tight truncate">{userName}</div>
+              <div className="text-[11px] text-muted-foreground font-semibold">
+                {userRole === "ADMIN" ? "Administrador" : userRole === "OPERADOR" ? "Operador" : "Viewer"}
+              </div>
             </div>
-          </div>
+          </Link>
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             <ThemeToggle />
             <button
@@ -313,7 +315,7 @@ export function Sidebar({
               className="p-1.5 rounded-md hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors"
               aria-label="Sair"
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         </div>
