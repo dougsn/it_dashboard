@@ -50,6 +50,15 @@ export async function middleware(req: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const csp   = buildCsp(nonce);
 
+  // Forward the nonce on the *request* headers so Next.js applies it to its own
+  // inline scripts (and server components can read it via headers()). Without this
+  // the nonce only reaches the browser, not Next's renderer, and every inline
+  // script — including next-themes' anti-flash script — gets blocked by the CSP.
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("Content-Security-Policy", csp);
+  requestHeaders.set("X-Nonce", nonce);
+  const passThrough = () => NextResponse.next({ request: { headers: requestHeaders } });
+
   let response: NextResponse;
 
   // Rate limit login attempts before NextAuth processes them
@@ -64,15 +73,29 @@ export async function middleware(req: NextRequest) {
         { status: 429 }
       );
     } else {
-      response = NextResponse.next();
+      response = passThrough();
     }
   } else {
     // Session enforcement — cast needed: NextAuth's `auth` expects NextAuthRequest
     const authFn = auth as unknown as (req: NextRequest) => Promise<NextResponse | null>;
-    response = (await authFn(req)) ?? NextResponse.next();
+    const authResponse = await authFn(req);
+    // A redirect/rewrite means the request was rejected (unauthorized) — pass it
+    // through untouched. Otherwise rebuild the pass-through so the nonce reaches
+    // the request headers, preserving any cookies the auth layer may have set.
+    const isRedirect =
+      !!authResponse &&
+      (authResponse.headers.has("location") ||
+        (authResponse.status >= 300 && authResponse.status < 400));
+    if (isRedirect) {
+      response = authResponse!;
+    } else {
+      response = passThrough();
+      const setCookies = authResponse?.headers.getSetCookie?.() ?? [];
+      for (const cookie of setCookies) response.headers.append("set-cookie", cookie);
+    }
   }
 
-  // Inject per-request nonce into CSP and expose it for server components
+  // Inject per-request nonce into CSP on the response too (browser enforcement)
   response.headers.set("Content-Security-Policy", csp);
   response.headers.set("X-Nonce", nonce);
   return response;

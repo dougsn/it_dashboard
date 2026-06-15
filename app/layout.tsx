@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Manrope, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
@@ -23,15 +24,18 @@ export const metadata: Metadata = {
   description: "WatchIT Tower — Monitoramento de equipamentos de TI",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Nonce forwarded by middleware.ts — lets next-themes nonce its inline anti-flash script
+  const nonce = (await headers()).get("X-Nonce") ?? undefined;
+
   return (
     <html lang="pt-BR" className={`${manrope.variable} ${jetbrainsMono.variable} h-full`} suppressHydrationWarning>
       <body className="min-h-full bg-background text-foreground antialiased">
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange nonce={nonce}>
           <AxeProvider>
             <TooltipProvider>
               {children}
