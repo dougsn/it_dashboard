@@ -23,6 +23,7 @@ const RELEASES: Release[] = [
     label: "Hardening de segurança e estabilidade",
     latest: true,
     changes: [
+      { type: "fix", text: "Salvar um dispositivo sem webhook de alerta não falha mais (campo vazio era rejeitado como URL inválida)" },
       { type: "fix", text: "Editar um dispositivo apagava as credenciais (RouterOS/Omada) quando não eram redigitadas — o formulário enviava em branco e o backend zerava; agora campos de credencial em branco são preservados na edição" },
       { type: "fix", text: "Mikrotik às vezes não exibia uptime/CPU/memória (o /system/resource voltava vazio na primeira tentativa em links remotos) — agora há retry e, se ainda faltar, um aviso explicando a provável causa (permissão da API)" },
       { type: "feat", text: "IP do dispositivo exibido nos incidentes e na linha do tempo do painel — facilita o acompanhamento" },

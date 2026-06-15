@@ -175,6 +175,8 @@ export function DeviceForm({ device }: DeviceFormProps) {
       const payload = {
         ...rest,
         maintenanceUntil: data.maintenanceUntil ? new Date(data.maintenanceUntil).toISOString() : null,
+        // "" is not a valid URL for the server schema — send null when no webhook is set
+        alertWebhookUrl: data.alertWebhookUrl || null,
         unifiControllerIp:
           data.unifiMode === "controller" && data.unifiControllerIp
             ? data.unifiControllerIp
