@@ -1,0 +1,26 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- Brand mark — WatchIT Tower lighthouse on the app's indigo gradient.
+       Mirrors components/sidebar.tsx BrandMark and lib lighthouse-icon.tsx. -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6d5cf6"/>
+      <stop offset="1" stop-color="#5b48e8"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="9" fill="url(#g)"/>
+  <g transform="translate(1.84 3.02) scale(1.18)"
+     fill="none" stroke="#ffffff" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2.4V3.4"/>
+    <path d="M9.8 6 12 3.7l2.2 2.3"/>
+    <path d="M10.4 6h3.2v2.5h-3.2z"/>
+    <circle cx="12" cy="7.25" r="0.7" fill="#ffffff" stroke="none"/>
+    <path d="M9.8 7.25H8M14.2 7.25H16"/>
+    <path d="M8.9 8.5h6.2"/>
+    <path d="M9.8 8.5 8.5 19.6M14.2 8.5 15.5 19.6"/>
+    <path d="M9.3 12.4h5.4"/>
+    <path d="M8.9 16h6.2"/>
+    <path d="M7.3 19.6h9.4"/>
+    <path d="M10.9 19.6v-2.3a1.1 1.1 0 0 1 2.2 0v2.3"/>
+  </g>
+</svg>
