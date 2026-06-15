@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const body = await parseAndValidate(req, bulkDeviceSchema);
   if (!body.ok) return body.response;
 
-  const { ipStart, ipEnd, name, snmpCommunity, routerosUser, routerosPass, unifiApiKey, unifiUser, unifiPass, ...config } = body.data;
+  const { ipStart, ipEnd, name, snmpCommunity, routerosUser, routerosPass, unifiApiKey, unifiUser, unifiPass, omadaClientId, omadaClientSecret, ...config } = body.data;
 
   const startInt = ipToInt(ipStart);
   const endInt = ipToInt(ipEnd);
@@ -61,6 +61,8 @@ export async function POST(req: NextRequest) {
       unifiApiKeyEnc:  unifiApiKey  ? encrypt(unifiApiKey)  : null,
       unifiUserEnc:    unifiUser    ? encrypt(unifiUser)    : null,
       unifiPassEnc:    unifiPass    ? encrypt(unifiPass)    : null,
+      omadaClientIdEnc:     omadaClientId     ? encrypt(omadaClientId)     : null,
+      omadaClientSecretEnc: omadaClientSecret ? encrypt(omadaClientSecret) : null,
     })),
     skipDuplicates: true,
   });
