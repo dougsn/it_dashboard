@@ -137,7 +137,13 @@ export function BulkDeviceForm() {
   const omadaEnabled    = watch("omadaEnabled");
   const omadaMode       = watch("omadaMode");
 
-  const [omadaTest, setOmadaTest] = useState<{ status: "idle" | "testing" | "ok" | "error"; message?: string }>({ status: "idle" });
+  const [omadaTest, setOmadaTest] = useState<{ status: "idle" | "testing" | "ok" | "error"; message?: string; sites?: unknown }>({ status: "idle" });
+
+  // Sites returned by the last successful Omada connection test, for the site picker
+  const omadaSites = Array.isArray(omadaTest.sites)
+    ? (omadaTest.sites as Array<{ siteId: string; name: string }>)
+    : [];
+  const omadaSiteId = watch("omadaSiteId");
 
   const preview = useCallback(() => {
     if (!ipStart || !ipEnd) return null;
@@ -195,6 +201,10 @@ export function BulkDeviceForm() {
       return;
     }
 
+    // Reset any previously selected site — the new test may target another controller
+    setValue("omadaSiteId", "");
+    setValue("omadaSite", "");
+
     await testOmadaConnection(
       {
         controllerIp,
@@ -203,13 +213,25 @@ export function BulkDeviceForm() {
         omadaClientId: values.omadaClientId || undefined,
         omadaClientSecret: values.omadaClientSecret || undefined,
       },
-      (s) => setOmadaTest(s as Parameters<typeof setOmadaTest>[0]),
+      (s) => {
+        setOmadaTest(s as Parameters<typeof setOmadaTest>[0]);
+        const sites = Array.isArray(s.sites) ? (s.sites as Array<{ siteId: string; name: string }>) : [];
+        // Auto-select when the controller exposes a single site (the common case)
+        if (s.status === "ok" && sites.length === 1) {
+          setValue("omadaSiteId", sites[0].siteId);
+          setValue("omadaSite", sites[0].name);
+        }
+      },
     );
   }
 
   async function onSubmit(data: FormData) {
     if (!ips || ips.length === 0) {
       toast.error("Range de IPs inválido");
+      return;
+    }
+    if (data.type === "OMADA_AP" && data.omadaEnabled && !data.omadaSiteId) {
+      toast.error("Selecione o site do Omada (teste a conexão para listar os sites)");
       return;
     }
     setLoading(true);
@@ -672,8 +694,32 @@ export function BulkDeviceForm() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Site (nome do site no Omada)</Label>
-                  <Input placeholder="Default" {...register("omadaSite")} />
+                  <Label className="text-xs">Site *</Label>
+                  {omadaSites.length > 0 ? (
+                    <Select
+                      value={omadaSiteId ?? ""}
+                      onValueChange={(v) => {
+                        setValue("omadaSiteId", v);
+                        setValue("omadaSite", omadaSites.find((s) => s.siteId === v)?.name ?? "");
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o site" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {omadaSites.map((s) => (
+                          <SelectItem key={s.siteId} value={s.siteId}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground rounded-md border border-dashed border-border px-3 py-2">
+                      Teste a conexão para listar os sites disponíveis e selecionar um.
+                    </p>
+                  )}
+                  {omadaSites.length > 0 && !omadaSiteId && (
+                    <p className="text-[11px] text-destructive">Selecione um site para continuar.</p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -761,7 +807,7 @@ export function BulkDeviceForm() {
       <div className="flex gap-3">
         <button
           type="submit"
-          disabled={loading || !ips || ips.length === 0}
+          disabled={loading || !ips || ips.length === 0 || (deviceType === "OMADA_AP" && omadaEnabled && !omadaSiteId)}
           className="inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
         >
           <Layers className="h-4 w-4" />
