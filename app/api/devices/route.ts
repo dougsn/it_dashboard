@@ -41,10 +41,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(devices.map(sanitizeDevice), { headers: { "X-Total-Count": String(total) } });
   }
 
-  // ETag: cheap aggregate instead of full fetch — only on unfiltered, non-paginated list
+  // ETag: cheap aggregate instead of full fetch — only on unfiltered, non-paginated list.
+  // Must include DeviceStatus: the worker updates status (isOnline/ping/checkedAt) without
+  // touching Device.updatedAt, so a device-only fingerprint would serve a stale 304 and
+  // freeze the dashboard on whatever snapshot was first loaded.
   if (!rawType) {
-    const agg = await db.device.aggregate({ _count: true, _max: { updatedAt: true } });
-    const fingerprint = `${agg._count}:${agg._max.updatedAt?.toISOString() ?? ""}`;
+    const [devAgg, statusAgg] = await Promise.all([
+      db.device.aggregate({ _count: true, _max: { updatedAt: true } }),
+      db.deviceStatus.aggregate({ _count: true, _max: { checkedAt: true } }),
+    ]);
+    const fingerprint = `${devAgg._count}:${devAgg._max.updatedAt?.toISOString() ?? ""}:${statusAgg._count}:${statusAgg._max.checkedAt?.toISOString() ?? ""}`;
     const etag = `"${createHash("md5").update(fingerprint).digest("hex")}"`;
     if (req.headers.get("if-none-match") === etag) {
       return new NextResponse(null, { status: 304, headers: { ETag: etag } });

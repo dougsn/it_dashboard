@@ -16,6 +16,9 @@ jest.mock("@/lib/db", () => ({
       count: jest.fn(),
       aggregate: jest.fn(),
     },
+    deviceStatus: {
+      aggregate: jest.fn(),
+    },
   },
 }));
 
@@ -67,6 +70,7 @@ const FAKE_DEVICE = {
 beforeEach(() => {
   jest.clearAllMocks();
   (mockDb.device.aggregate as jest.Mock).mockResolvedValue({ _count: 1, _max: { updatedAt: new Date("2024-01-01") } });
+  (mockDb.deviceStatus.aggregate as jest.Mock).mockResolvedValue({ _count: 1, _max: { checkedAt: new Date("2024-01-01") } });
 });
 
 describe("GET /api/devices", () => {
@@ -112,6 +116,23 @@ describe("GET /api/devices", () => {
     const res = await GET(new NextRequest("http://localhost/api/devices"));
     const data = await res.json();
     expect(data[0].currentStatus.isOnline).toBe(true);
+  });
+
+  it("ETag changes when device status changes (regression: stale 304 froze the dashboard)", async () => {
+    mockAuth.mockResolvedValue(FAKE_SESSION as never);
+    (mockDb.device.findMany as jest.Mock).mockResolvedValue([FAKE_DEVICE]);
+
+    // First snapshot: a status check at T1
+    (mockDb.deviceStatus.aggregate as jest.Mock).mockResolvedValueOnce({ _count: 1, _max: { checkedAt: new Date("2024-01-01T00:00:00Z") } });
+    const etag1 = (await GET(new NextRequest("http://localhost/api/devices"))).headers.get("ETag");
+
+    // Worker writes new statuses (later checkedAt) — Device.updatedAt unchanged
+    (mockDb.deviceStatus.aggregate as jest.Mock).mockResolvedValueOnce({ _count: 1, _max: { checkedAt: new Date("2024-01-01T00:05:00Z") } });
+    const etag2 = (await GET(new NextRequest("http://localhost/api/devices"))).headers.get("ETag");
+
+    expect(etag1).toBeTruthy();
+    expect(etag2).toBeTruthy();
+    expect(etag1).not.toBe(etag2);
   });
 });
 

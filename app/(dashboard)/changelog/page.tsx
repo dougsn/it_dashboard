@@ -23,6 +23,7 @@ const RELEASES: Release[] = [
     label: "Hardening de segurança e estabilidade",
     latest: true,
     changes: [
+      { type: "fix", text: "Painel deixava de atualizar o status dos dispositivos (mostrava só os primeiros checados como online e o restante offline, KPIs de instáveis e clientes Wi-Fi zerados) — o cache da lista (ETag) ignorava mudanças de status e servia um snapshot congelado" },
       { type: "security", text: "Autorização por papel reforçada — VIEWER não obtém mais tokens de webhook nem dispara verificações de rede/tráfego ao vivo (apenas OPERADOR+)" },
       { type: "security", text: "Trocar a senha de um usuário invalida imediatamente todas as sessões antigas dele" },
       { type: "security", text: "Community SNMP nunca mais é retornada nas respostas da API — exposta apenas como indicador 'configurado'" },
