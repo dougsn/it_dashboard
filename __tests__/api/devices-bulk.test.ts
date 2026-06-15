@@ -92,6 +92,32 @@ describe("POST /api/devices/bulk", () => {
     expect(callData[0].snmpCommunity).toBeUndefined(); // plaintext column not written
   });
 
+  it("encrypts Omada credentials and never passes plaintext client fields to createMany", async () => {
+    mockAuth.mockResolvedValue(FAKE_SESSION as never);
+    (mockDb.device.createMany as jest.Mock).mockResolvedValue({ count: 2 });
+
+    await POST(makeReq({
+      name: "AP",
+      ipStart: "192.168.1.100",
+      ipEnd: "192.168.1.101",
+      type: "OMADA_AP",
+      omadaEnabled: true,
+      omadacId: "abc123",
+      omadaClientId: "client-id",
+      omadaClientSecret: "client-secret",
+    }));
+
+    const callData = (mockDb.device.createMany as jest.Mock).mock.calls[0][0].data as Array<Record<string, unknown>>;
+    // Plaintext input-only fields must NOT reach Prisma (they are not Device columns → 500)
+    expect(callData[0].omadaClientId).toBeUndefined();
+    expect(callData[0].omadaClientSecret).toBeUndefined();
+    // They must be encrypted into the *Enc columns instead
+    expect(callData[0].omadaClientIdEnc).toBeTruthy();
+    expect(callData[0].omadaClientIdEnc).not.toBe("client-id");
+    expect(callData[0].omadaClientSecretEnc).toBeTruthy();
+    expect(callData[0].omadaClientSecretEnc).not.toBe("client-secret");
+  });
+
   it("returns 400 when ipStart > ipEnd", async () => {
     mockAuth.mockResolvedValue(FAKE_SESSION as never);
     const res = await POST(makeReq({ ...BASE_PAYLOAD, ipStart: "192.168.1.200", ipEnd: "192.168.1.100" }));
