@@ -6,7 +6,7 @@ jest.mock("https", () => ({ request: jest.fn() }));
 jest.mock("http",  () => ({ request: jest.fn() }));
 
 import * as https from "https";
-import { checkOmada } from "@/worker/monitors/omada";
+import { checkOmada, resolveOmadaSiteId } from "@/worker/monitors/omada";
 
 const mockRequest = https.request as jest.Mock;
 
@@ -207,5 +207,44 @@ describe("checkOmada — error cases", () => {
     mockQueue([fakeRes(200, { errorCode: 0, result: {} })]);
     await expect(checkOmada(apIp, ctrl, omadacId, clientId, secret, siteId, false))
       .rejects.toThrow(/autenticação/i);
+  });
+});
+
+// ── Site id resolution (self-heal for bulk-created devices) ─────────────────────
+
+describe("resolveOmadaSiteId", () => {
+  // Request order: 1=token, 2=sites list
+  const sites = [
+    { siteId: "site-default", name: "Default" },
+    { siteId: "site-bota",    name: "Botafogo" },
+  ];
+
+  it("resolves the site id from the name, case-insensitively", async () => {
+    mockQueue([
+      fakeRes(200, { errorCode: 0, result: { accessToken: "AT", expiresIn: 7200 } }),
+      fakeRes(200, { result: { data: sites } }),
+    ]);
+    // bulk stored "default" (lowercase) — must match "Default"
+    const resolved = await resolveOmadaSiteId(ctrl, omadacId, clientId, secret, "default", false);
+    expect(resolved).toEqual({ siteId: "site-default", name: "Default", matchedByName: true });
+  });
+
+  it("falls back to the only site when the name does not match (single-site controller)", async () => {
+    mockQueue([
+      fakeRes(200, { errorCode: 0, result: { accessToken: "AT", expiresIn: 7200 } }),
+      fakeRes(200, { result: { data: [{ siteId: "site-bota", name: "Botafogo" }] } }),
+    ]);
+    // bulk stored "default" but the controller's only site is "Botafogo"
+    const resolved = await resolveOmadaSiteId(ctrl, omadacId, clientId, secret, "default", false);
+    expect(resolved).toEqual({ siteId: "site-bota", name: "Botafogo", matchedByName: false });
+  });
+
+  it("returns null when no name matches and there are multiple sites", async () => {
+    mockQueue([
+      fakeRes(200, { errorCode: 0, result: { accessToken: "AT", expiresIn: 7200 } }),
+      fakeRes(200, { result: { data: sites } }),
+    ]);
+    const resolved = await resolveOmadaSiteId(ctrl, omadacId, clientId, secret, "Inexistente", false);
+    expect(resolved).toBeNull();
   });
 });

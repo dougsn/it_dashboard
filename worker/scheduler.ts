@@ -4,7 +4,7 @@ import { checkHttp } from "./monitors/http";
 import { checkSnmp } from "./monitors/snmp";
 import { checkRouterOS } from "./monitors/routeros";
 import { checkUnifi } from "./monitors/unifi";
-import { checkOmada } from "./monitors/omada";
+import { checkOmada, resolveOmadaSiteId } from "./monitors/omada";
 import { checkLinkTraffic } from "./monitors/link-traffic";
 import { resolveRouterosCredentials, resolveSnmpCommunity, resolveUnifiApiKey, resolveUnifiCredentials, resolveOmadaCredentials } from "../lib/crypto";
 import { log } from "../lib/logger";
@@ -121,12 +121,35 @@ export async function runChecks(device: Device): Promise<boolean> {
         ? checkUnifi(device.ip, controllerIp, { method: "apikey", apiKey }, device.unifiPort, device.unifiSite, device.unifiTlsVerify)
         : Promise.resolve(null);
     })(),
-    (() => {
-      if (!device.omadaEnabled) return Promise.resolve(null);
+    (async () => {
+      if (!device.omadaEnabled) return null;
       const creds = resolveOmadaCredentials(device);
-      if (!creds || !device.omadacId || !device.omadaSiteId) return Promise.resolve(null);
+      if (!creds || !device.omadacId) return null;
       const controllerIp = device.omadaControllerIp ?? device.ip;
-      return checkOmada(device.ip, controllerIp, device.omadacId, creds.clientId, creds.clientSecret, device.omadaSiteId, device.omadaTlsVerify);
+
+      // Self-heal devices created in bulk: only the site name was stored, so
+      // resolve its API id from the name once and persist it for future ticks.
+      let siteId = device.omadaSiteId;
+      if (!siteId) {
+        const resolved = await resolveOmadaSiteId(
+          controllerIp, device.omadacId, creds.clientId, creds.clientSecret, device.omadaSite ?? "", device.omadaTlsVerify,
+        );
+        if (!resolved) {
+          log("warn", "[Omada] site não encontrado — verifique 'Site' no cadastro (controlador com múltiplos sites e nome divergente)", {
+            device: device.name, ip: device.ip, site: device.omadaSite,
+          });
+          return null;
+        }
+        siteId = resolved.siteId;
+        device.omadaSiteId = siteId;
+        await db.device.update({ where: { id: device.id }, data: { omadaSiteId: siteId } });
+        log("info", "[Omada] omadaSiteId resolvido e salvo", {
+          device: device.name, siteConfigurado: device.omadaSite, siteUsado: resolved.name, siteId,
+          porNome: resolved.matchedByName,
+        });
+      }
+
+      return checkOmada(device.ip, controllerIp, device.omadacId, creds.clientId, creds.clientSecret, siteId, device.omadaTlsVerify);
     })(),
   ]);
 

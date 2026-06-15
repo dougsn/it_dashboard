@@ -221,6 +221,29 @@ export async function listOmadaSites(
   return data.map((s) => ({ siteId: s.siteId, name: s.name }));
 }
 
+// Resolve a site's API id from its display name. Used by the worker to self-heal
+// devices created in bulk, where only the site name was stored (omadaSiteId empty).
+// Matches the name case-insensitively; if no name matches but the controller has
+// exactly one site, falls back to it (the common single-site case — the bulk form's
+// "default" placeholder rarely matches the real site name). Returns null otherwise.
+export async function resolveOmadaSiteId(
+  controllerIp: string,
+  omadacId: string,
+  clientId: string,
+  clientSecret: string,
+  siteName: string,
+  tlsVerify: boolean,
+  port = 443,
+): Promise<{ siteId: string; name: string; matchedByName: boolean } | null> {
+  const token = await getOmadaToken(controllerIp, omadacId, clientId, clientSecret, tlsVerify, port);
+  const sites = await listOmadaSites(controllerIp, omadacId, token, tlsVerify, port);
+  const target = siteName.trim().toLowerCase();
+  const byName = sites.find((s) => s.name.trim().toLowerCase() === target);
+  if (byName) return { siteId: byName.siteId, name: byName.name, matchedByName: true };
+  if (sites.length === 1) return { siteId: sites[0].siteId, name: sites[0].name, matchedByName: false };
+  return null;
+}
+
 // ── Main monitor ──────────────────────────────────────────────────────────────
 
 export async function checkOmada(

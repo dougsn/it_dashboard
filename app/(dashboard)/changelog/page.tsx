@@ -25,6 +25,7 @@ const RELEASES: Release[] = [
     changes: [
       { type: "security", text: "Política de segurança de conteúdo (CSP) com nonce voltou a funcionar — o nonce por requisição agora é propagado ao Next.js e ao tema, sem bloquear scripts legítimos da página" },
       { type: "fix", text: "Criação em massa de APs Omada não falha mais com erro 500 — as credenciais (Client ID/Secret) agora são criptografadas e gravadas corretamente, como na criação individual" },
+      { type: "fix", text: "APs Omada criados em massa agora leem a API automaticamente — o worker resolve o ID do site a partir do nome (ou do único site do controlador) e salva, sem precisar configurar o site manualmente" },
       { type: "fix", text: "Salvar um dispositivo sem webhook de alerta não falha mais (campo vazio era rejeitado como URL inválida)" },
       { type: "fix", text: "Editar um dispositivo apagava as credenciais (RouterOS/Omada) quando não eram redigitadas — o formulário enviava em branco e o backend zerava; agora campos de credencial em branco são preservados na edição" },
       { type: "fix", text: "Mikrotik às vezes não exibia uptime/CPU/memória (o /system/resource voltava vazio na primeira tentativa em links remotos) — agora há retry e, se ainda faltar, um aviso explicando a provável causa (permissão da API)" },
