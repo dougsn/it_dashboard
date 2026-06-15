@@ -10,6 +10,7 @@ export interface Incident {
   id: string;
   deviceId: string;
   deviceName: string;
+  deviceIp: string;
   deviceType: DeviceType;
   startAt: string;
   endAt: string | null;
@@ -38,7 +39,7 @@ export async function GET(req: Request) {
   // query returns only the rows where isOnline changed (not the full history),
   // keeping memory bounded even for 30-day windows over a large fleet.
   const [devices, transitions] = await Promise.all([
-    db.device.findMany({ select: { id: true, name: true, type: true }, orderBy: { name: "asc" } }),
+    db.device.findMany({ select: { id: true, name: true, ip: true, type: true }, orderBy: { name: "asc" } }),
     getOnlineTransitions(since),
   ]);
 
@@ -54,6 +55,7 @@ export async function GET(req: Request) {
         id: inc.resolved ? `${device.id}-${startMs}` : `${device.id}-${startMs}-open`,
         deviceId: device.id,
         deviceName: device.name,
+        deviceIp: device.ip,
         deviceType: device.type,
         startAt: inc.startAt,
         endAt: inc.endAt,

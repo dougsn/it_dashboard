@@ -357,6 +357,12 @@ function IncidentTimelineRow({ ev }: { ev: TimelineEvent }) {
         <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground">
           <EIcon className="h-3 w-3 shrink-0" />
           <span>{ENTITY_LABEL[ev.entityType]}</span>
+          {ev.ip && (
+            <>
+              <span className="opacity-40">·</span>
+              <span className="font-mono">{ev.ip}</span>
+            </>
+          )}
           {ev.location && (
             <>
               <span className="opacity-40">·</span>

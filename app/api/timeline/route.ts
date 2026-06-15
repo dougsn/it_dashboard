@@ -19,6 +19,7 @@ export interface TimelineEvent {
   entityId: string;
   entityName: string;
   entityType: DeviceType | "LINK";
+  ip: string | null;
   location: string | null;
   timestamp: string;
   value?: number;
@@ -41,7 +42,7 @@ export async function GET(req: Request) {
   // state OR its high-latency bucket changed — not the full history — keeping
   // memory bounded for the whole fleet.
   const [devices, statusEvents] = await Promise.all([
-    db.device.findMany({ select: { id: true, name: true, type: true, location: true } }),
+    db.device.findMany({ select: { id: true, name: true, ip: true, type: true, location: true } }),
     getDeviceStatusEvents(since, LATENCY_THRESHOLD_MS),
   ]);
 
@@ -65,6 +66,7 @@ export async function GET(req: Request) {
           entityId: device.id,
           entityName: device.name,
           entityType: device.type,
+          ip: device.ip,
           location: device.location ?? null,
           timestamp: curr.timestamp.toISOString(),
         });
@@ -79,6 +81,7 @@ export async function GET(req: Request) {
           entityId: device.id,
           entityName: device.name,
           entityType: device.type,
+          ip: device.ip,
           location: device.location ?? null,
           timestamp: curr.timestamp.toISOString(),
         });
@@ -94,6 +97,7 @@ export async function GET(req: Request) {
             entityId: device.id,
             entityName: device.name,
             entityType: device.type,
+            ip: device.ip,
             location: device.location ?? null,
             timestamp: curr.timestamp.toISOString(),
             value: curr.pingMs ?? undefined,
@@ -126,6 +130,7 @@ export async function GET(req: Request) {
         entityId: link.id,
         entityName: link.name,
         entityType: "LINK",
+        ip: null,
         location: link.location ?? null,
         timestamp: ev.timestamp.toISOString(),
       });

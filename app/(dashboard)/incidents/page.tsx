@@ -223,6 +223,10 @@ export default function IncidentsPage() {
                             {inc.deviceName}
                           </p>
                           <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                            <span className="font-mono text-[10px] text-muted-foreground">
+                              {inc.deviceIp}
+                            </span>
+                            <span className="text-muted-foreground/40 text-[10px]">·</span>
                             <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
                               <Clock className="h-2.5 w-2.5" />
                               {fmtTime(inc.startAt, { hour: "2-digit", minute: "2-digit" })}

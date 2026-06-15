@@ -29,7 +29,7 @@ function makeReq(params = "") {
   return new NextRequest(`http://localhost/api/timeline${params}`);
 }
 
-const DEVICE_META = [{ id: "d1", name: "Router", type: "MIKROTIK", location: null }];
+const DEVICE_META = [{ id: "d1", name: "Router", ip: "10.0.0.1", type: "MIKROTIK", location: null }];
 
 // flat transition rows as returned by the LAG query
 function rows(history: { isOnline: boolean; pingMs?: number | null; timestamp: Date }[]) {
@@ -68,6 +68,7 @@ describe("device offline/online events", () => {
     expect(events[0].kind).toBe("DEVICE_OFFLINE");
     expect(events[0].timestamp).toBe(t2.toISOString());
     expect(events[0].entityId).toBe("d1");
+    expect(events[0].ip).toBe("10.0.0.1");
   });
 
   it("emits DEVICE_ONLINE on offline→online recovery", async () => {

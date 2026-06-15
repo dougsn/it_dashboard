@@ -28,7 +28,7 @@ function makeReq(params = "") {
 }
 
 // device metadata returned by findMany (no history)
-const DEVICE_META = [{ id: "device-1", name: "Router SP", type: "MIKROTIK" }];
+const DEVICE_META = [{ id: "device-1", name: "Router SP", ip: "10.0.0.1", type: "MIKROTIK" }];
 
 // helper: transition rows as returned by $queryRaw (flat, with deviceId)
 function rows(history: { isOnline: boolean; timestamp: Date }[]) {
@@ -91,6 +91,7 @@ describe("GET /api/incidents", () => {
     expect(data[0].startAt).toBe(t2.toISOString());
     expect(data[0].endAt).toBe(t3.toISOString());
     expect(data[0].durationMs).toBe(t3.getTime() - t2.getTime());
+    expect(data[0].deviceIp).toBe("10.0.0.1");
   });
 
   it("detects an open incident when last state is offline", async () => {
