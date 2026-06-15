@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { BulkDeviceForm } from "@/components/bulk-device-form";
 
 jest.mock("next/navigation", () => ({
@@ -35,5 +36,18 @@ describe("BulkDeviceForm", () => {
   it("shows cancel button", () => {
     render(<BulkDeviceForm />);
     expect(screen.getByRole("button", { name: /cancelar/i })).toBeInTheDocument();
+  });
+
+  it("reveals the Omada configuration section when the Omada AP type is selected", async () => {
+    const user = userEvent.setup();
+    render(<BulkDeviceForm />);
+
+    // Default type (Câmera) does not show the Omada section
+    expect(screen.queryByText(/Omada Controller API/i)).not.toBeInTheDocument();
+
+    // Switching to Omada AP surfaces the Omada monitor configuration
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByText(/Omada AP/i));
+    expect(screen.getByText(/Omada Controller API/i)).toBeInTheDocument();
   });
 });
