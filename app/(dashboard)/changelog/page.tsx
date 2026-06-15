@@ -23,6 +23,7 @@ const RELEASES: Release[] = [
     label: "Hardening de segurança e estabilidade",
     latest: true,
     changes: [
+      { type: "refactor", text: "Favicon do app atualizado para o farol da marca (WatchIT Tower) na aba do navegador, substituindo o ícone padrão" },
       { type: "fix", text: "Status online/offline de APs Omada e UniFi agora reflete o estado real reportado pelo controlador — APs desligados deixam de aparecer como online (falso positivo) e APs ativos via API key deixam de aparecer como offline (falso negativo)" },
       { type: "security", text: "Política de segurança de conteúdo (CSP) com nonce voltou a funcionar — o nonce por requisição agora é propagado ao Next.js e ao tema, sem bloquear scripts legítimos da página" },
       { type: "fix", text: "Criação em massa de APs Omada não falha mais com erro 500 — as credenciais (Client ID/Secret) agora são criptografadas e gravadas corretamente, como na criação individual" },
