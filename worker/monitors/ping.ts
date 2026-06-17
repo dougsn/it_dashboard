@@ -9,7 +9,6 @@ export async function checkPing(ip: string): Promise<PingResult> {
   try {
     const result = await ping.promise.probe(ip, {
       timeout: 5,
-      extra: ["-c", "1"],
     });
 
     const alive = result.alive;
@@ -17,10 +16,11 @@ export async function checkPing(ip: string): Promise<PingResult> {
     const responseMs =
       alive && String(timeVal) !== "unknown" && !isNaN(Number(timeVal))
         ? Math.round(Number(timeVal))
-        : null;
+        : alive ? 1 : null; // If alive but time is unknown (e.g. <1ms on Windows Portuguese), fallback to 1ms instead of null
 
     return { alive, responseMs };
-  } catch {
+  } catch (error) {
+    console.error(`[Ping] Error pinging ${ip}:`, error);
     return { alive: false, responseMs: null };
   }
 }
