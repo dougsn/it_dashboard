@@ -37,12 +37,12 @@ function getOids(
   });
 }
 
-async function tryGetSnmp(ip: string, community: string, port: number, version: snmp.Version): Promise<SnmpResult> {
+async function tryGetSnmp(ip: string, community: string, port: number, version: number): Promise<SnmpResult> {
   const session = snmp.createSession(ip, community, {
     port,
     timeout: 3000,
     retries: 1,
-    version,
+    version: version as any,
   });
 
   try {
